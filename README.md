@@ -13,7 +13,7 @@ Tasks arrive unstructured. Brainer is not a full project manager yet. It is a ca
 3. GPT enriches the same file (title, due phrase, context, open questions).
 4. If the message looks like several work items, Brainer **marks** split candidates — it does not create extra files yet.
 
-Living design notes live in [`idea/`](idea/). Before any new feature:
+Living design notes live in [`idea/`](idea/). For a new AI/chat session, start with [`idea/CONTEXT.md`](idea/CONTEXT.md). Before any new feature:
 
 1. Read `idea/` and check invariants.
 2. If the feature breaks an invariant, reform the idea docs and append [`idea/CHANGELOG.md`](idea/CHANGELOG.md).

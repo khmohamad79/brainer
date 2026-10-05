@@ -1,5 +1,9 @@
 # Idea changelog
 
+## 2026-10-05 — Session context file
+
+- Added `idea/CONTEXT.md` as the handoff primer for future chats (`@idea/CONTEXT.md`).
+
 ## 2026-10-05 — Rename GPT env vars
 
 - Env keys are `GPT_BASE_URL`, `GPT_TOKEN`, `GPT_MODEL` (no provider prefix).
