@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brainer</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">assignment capture</p>
+        <h1>Brainer</h1>
+      </div>
+      <p class="lede">Paste anything you were assigned. It is saved to disk first, then structured.</p>
+    </header>
+
+    <form id="capture" class="capture">
+      <label for="raw">New assignment</label>
+      <textarea id="raw" name="raw" rows="6" required placeholder="Slack ping, meeting dump, “fix login by Friday, talk to Sara”…" dir="auto"></textarea>
+      <div class="row">
+        <button type="submit" id="save">Record</button>
+        <p id="save-status" class="status" aria-live="polite"></p>
+      </div>
+    </form>
+
+    <div class="layout">
+      <section>
+        <h2>Inbox</h2>
+        <ul id="list" class="list"></ul>
+      </section>
+      <section id="detail" class="detail empty">
+        <p class="muted">Select a task.</p>
+      </section>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
