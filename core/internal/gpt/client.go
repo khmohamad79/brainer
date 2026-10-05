@@ -57,7 +57,7 @@ type chatResponse struct {
 
 func (c *Client) ChatJSON(system, user string) (string, error) {
 	if c.Token == "" {
-		return "", fmt.Errorf("HOOSHYAR_TOKEN is empty")
+		return "", fmt.Errorf("GPT_TOKEN is empty")
 	}
 	body, err := json.Marshal(chatRequest{
 		Model: c.Model,

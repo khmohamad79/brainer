@@ -30,7 +30,7 @@ brainer/
 │   │   ├── api/          # HTTP routes
 │   │   ├── config/       # .env loader
 │   │   ├── enrich/       # GPT structuring
-│   │   ├── gpt/          # Hooshyar client
+│   │   ├── gpt/          # OpenAI-compatible GPT client
 │   │   └── memory/       # YAML file store
 │   └── web/              # UI (HTML/CSS/JS), served by the same binary
 ├── memory/               # runtime task store (gitignored)
@@ -43,22 +43,22 @@ Each task is one YAML file, e.g. `memory/tasks/20261005T141409Z_fix-login-bug.ya
 ## Requirements
 
 - Go 1.23+
-- Hooshyar / Abramad GPT token
+- GPT API token (OpenAI-compatible endpoint)
 
 ## Setup
 
 ```bash
 cp .env.example .env
-# edit .env and set HOOSHYAR_TOKEN
+# edit .env: set GPT_BASE_URL and GPT_TOKEN
 ```
 
 Relevant env vars:
 
 | Key | Default | Purpose |
 |-----|---------|---------|
-| `HOOSHYAR_BASE_URL` | `http://api.hooshyar.systemgroup.net/abramad/gpt/v1` | GPT API base |
-| `HOOSHYAR_TOKEN` | _(required)_ | Bearer token |
-| `HOOSHYAR_MODEL` | `/gpt-120` | Model id from Hooshyar `/models` |
+| `GPT_BASE_URL` | _(set in `.env`)_ | OpenAI-compatible API base |
+| `GPT_TOKEN` | _(required)_ | Bearer token |
+| `GPT_MODEL` | `/gpt-120` | Model id |
 | `MEMORY_DIR` | `memory` | Task store root |
 | `HTTP_ADDR` | `:8080` | Listen address |
 

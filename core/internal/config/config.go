@@ -6,12 +6,12 @@ import (
 )
 
 type Config struct {
-	RepoRoot        string
-	MemoryDir       string
-	HTTPAddr        string
-	HooshyarBaseURL string
-	HooshyarToken   string
-	HooshyarModel   string
+	RepoRoot   string
+	MemoryDir  string
+	HTTPAddr   string
+	GPTBaseURL string
+	GPTToken   string
+	GPTModel   string
 }
 
 func Load() (Config, error) {
@@ -20,12 +20,12 @@ func Load() (Config, error) {
 	loadDotEnv(".env")
 
 	cfg := Config{
-		RepoRoot:        root,
-		MemoryDir:       firstNonEmpty(os.Getenv("MEMORY_DIR"), filepath.Join(root, "memory")),
-		HTTPAddr:        firstNonEmpty(os.Getenv("HTTP_ADDR"), ":8080"),
-		HooshyarBaseURL: firstNonEmpty(os.Getenv("HOOSHYAR_BASE_URL"), "http://api.hooshyar.systemgroup.net/abramad/gpt/v1"),
-		HooshyarToken:   os.Getenv("HOOSHYAR_TOKEN"),
-		HooshyarModel:   firstNonEmpty(os.Getenv("HOOSHYAR_MODEL"), "/gpt-120"),
+		RepoRoot:   root,
+		MemoryDir:  firstNonEmpty(os.Getenv("MEMORY_DIR"), filepath.Join(root, "memory")),
+		HTTPAddr:   firstNonEmpty(os.Getenv("HTTP_ADDR"), ":8080"),
+		GPTBaseURL: firstNonEmpty(os.Getenv("GPT_BASE_URL"), "http://api.hooshyar.systemgroup.net/abramad/gpt/v1"),
+		GPTToken:   os.Getenv("GPT_TOKEN"),
+		GPTModel:   firstNonEmpty(os.Getenv("GPT_MODEL"), "/gpt-120"),
 	}
 	if !filepath.IsAbs(cfg.MemoryDir) {
 		cfg.MemoryDir = filepath.Join(root, cfg.MemoryDir)

@@ -20,7 +20,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	client := gpt.New(cfg.HooshyarBaseURL, cfg.HooshyarToken, cfg.HooshyarModel)
+	client := gpt.New(cfg.GPTBaseURL, cfg.GPTToken, cfg.GPTModel)
 	srv := &api.Server{
 		Store: store,
 		Enrich: &enrich.Runner{
@@ -28,7 +28,7 @@ func main() {
 			Store: store,
 		},
 	}
-	log.Printf("brainer on %s (memory %s, model %s)", cfg.HTTPAddr, cfg.MemoryDir, cfg.HooshyarModel)
+	log.Printf("brainer on %s (memory %s, model %s)", cfg.HTTPAddr, cfg.MemoryDir, cfg.GPTModel)
 	if err := http.ListenAndServe(cfg.HTTPAddr, srv.Handler()); err != nil {
 		log.Fatal(err)
 	}

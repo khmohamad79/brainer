@@ -7,7 +7,7 @@ core/
   cmd/brainer/          # main
   internal/api/         # HTTP JSON
   internal/memory/      # YAML store
-  internal/gpt/         # Hooshyar / OpenAI-compatible client
+  internal/gpt/         # OpenAI-compatible GPT client
   internal/enrich/      # prompt + map onto existing task
   internal/config/      # .env
   web/                  # separate UI package, embedded
@@ -27,9 +27,9 @@ cd core && go run ./cmd/brainer
 
 | Key | Purpose |
 |-----|---------|
-| `HOOSHYAR_BASE_URL` | default `http://api.hooshyar.systemgroup.net/abramad/gpt/v1` |
-| `HOOSHYAR_TOKEN` | bearer token |
-| `HOOSHYAR_MODEL` | model id (default `/gpt-120`) |
+| `GPT_BASE_URL` | OpenAI-compatible API base (required in `.env`; has a built-in default if empty) |
+| `GPT_TOKEN` | bearer token |
+| `GPT_MODEL` | model id (default `/gpt-120`) |
 | `MEMORY_DIR` | override store path |
 | `HTTP_ADDR` | default `:8080` |
 

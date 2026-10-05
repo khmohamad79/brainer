@@ -1,5 +1,10 @@
 # Idea changelog
 
+## 2026-10-05 — Rename GPT env vars
+
+- Env keys are `GPT_BASE_URL`, `GPT_TOKEN`, `GPT_MODEL` (no provider prefix).
+- `.env.example` leaves `GPT_BASE_URL` empty; do not commit provider URLs there.
+
 ## 2026-10-05 — Hooshyar model fix
 
 - Working model id from `/models` is `/gpt-120` (not `gpt-4o-mini`).
