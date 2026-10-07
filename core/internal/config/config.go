@@ -3,15 +3,18 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Config struct {
-	RepoRoot   string
-	MemoryDir  string
-	HTTPAddr   string
-	GPTBaseURL string
-	GPTToken   string
-	GPTModel   string
+	RepoRoot    string
+	MemoryDir   string
+	HTTPAddr    string
+	GPTBaseURL  string
+	GPTToken    string
+	GPTModel    string
+	JiraBaseURL string
+	JiraToken   string
 }
 
 func Load() (Config, error) {
@@ -20,12 +23,14 @@ func Load() (Config, error) {
 	loadDotEnv(".env")
 
 	cfg := Config{
-		RepoRoot:   root,
-		MemoryDir:  firstNonEmpty(os.Getenv("MEMORY_DIR"), filepath.Join(root, "memory")),
-		HTTPAddr:   firstNonEmpty(os.Getenv("HTTP_ADDR"), ":8080"),
-		GPTBaseURL: firstNonEmpty(os.Getenv("GPT_BASE_URL"), "http://api.hooshyar.systemgroup.net/abramad/gpt/v1"),
-		GPTToken:   os.Getenv("GPT_TOKEN"),
-		GPTModel:   firstNonEmpty(os.Getenv("GPT_MODEL"), "/gpt-120"),
+		RepoRoot:    root,
+		MemoryDir:   firstNonEmpty(os.Getenv("MEMORY_DIR"), filepath.Join(root, "memory")),
+		HTTPAddr:    firstNonEmpty(os.Getenv("HTTP_ADDR"), ":8080"),
+		GPTBaseURL:  firstNonEmpty(os.Getenv("GPT_BASE_URL"), "http://api.hooshyar.systemgroup.net/abramad/gpt/v1"),
+		GPTToken:    os.Getenv("GPT_TOKEN"),
+		GPTModel:    firstNonEmpty(os.Getenv("GPT_MODEL"), "/gpt-120"),
+		JiraBaseURL: strings.TrimRight(os.Getenv("JIRA_BASE_URL"), "/"),
+		JiraToken:   os.Getenv("JIRA_TOKEN"),
 	}
 	if !filepath.IsAbs(cfg.MemoryDir) {
 		cfg.MemoryDir = filepath.Join(root, cfg.MemoryDir)

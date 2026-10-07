@@ -160,3 +160,67 @@ func TestOrgTeamsAndEmployees(t *testing.T) {
 		t.Fatalf("expected empty org: %+v", org)
 	}
 }
+
+func TestStoriesCRUD(t *testing.T) {
+	dir := t.TempDir()
+	store, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	story, err := store.AddStory(" Payment timeout ", "devpr-5982", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if story.ID != "payment-timeout" || story.Title != "Payment timeout" || story.JiraKey != "DEVPR-5982" {
+		t.Fatalf("story: %+v", story)
+	}
+	title := "Payment timeouts"
+	summary := "Timeouts on checkout"
+	story, err = store.UpdateStory(story.ID, &title, nil, &summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if story.ID != "payment-timeout" || story.Title != "Payment timeouts" || story.Summary != summary {
+		t.Fatalf("update: %+v", story)
+	}
+	key := "DEVPR-6000"
+	story, err = store.UpdateStory(story.ID, nil, &key, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if story.JiraKey != "DEVPR-6000" {
+		t.Fatalf("jira key: %+v", story)
+	}
+	list, err := store.Stories()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Stories) != 1 {
+		t.Fatalf("list: %+v", list)
+	}
+	task, err := store.Capture("work on payment timeout DEVPR-6000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	task.StoryID = story.ID
+	if err := store.Save(task); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Get(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.StoryID != story.ID {
+		t.Fatalf("story_id: %q", got.StoryID)
+	}
+	if err := store.DeleteStory(story.ID); err != nil {
+		t.Fatal(err)
+	}
+	list, err = store.Stories()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Stories) != 0 {
+		t.Fatalf("expected empty stories: %+v", list)
+	}
+}

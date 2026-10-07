@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Brainer — Teams</title>
+  <title>Brainer — Stories</title>
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
   <header class="topbar">
     <nav class="nav" aria-label="Primary">
       <a href="/">Capture</a>
-      <a href="/teams" aria-current="page">Teams</a>
-      <a href="/stories">Stories</a>
+      <a href="/teams">Teams</a>
+      <a href="/stories" aria-current="page">Stories</a>
     </nav>
     <div class="memobar" role="status" aria-live="polite" aria-atomic="true">
       <span id="memobar-text"></span>
@@ -21,9 +21,9 @@
 
   <div class="app">
     <main class="main" id="main">
-      <form id="add-team" class="composer">
-        <input id="team-name" name="name" type="text" required autocomplete="off" aria-label="Team name" />
-        <button type="submit" id="save-team" class="composer-submit">Add</button>
+      <form id="add-story" class="composer">
+        <input id="story-title" name="title" type="text" required autocomplete="off" aria-label="Story title" />
+        <button type="submit" id="save-story" class="composer-submit">Add</button>
       </form>
       <section id="detail" class="detail" hidden></section>
       <p id="status" class="status" aria-live="polite"></p>
@@ -31,14 +31,14 @@
 
     <aside class="sidebar">
       <div class="sidebar-head">
-        <span>Teams</span>
-        <button type="button" class="linkish" id="new-team">New</button>
+        <span>Stories</span>
+        <button type="button" class="linkish" id="new-story">New</button>
       </div>
       <ul id="list" class="list"></ul>
     </aside>
   </div>
 
   <script src="/static/memory-bar.js"></script>
-  <script src="/static/teams.js"></script>
+  <script src="/static/stories.js"></script>
 </body>
 </html>

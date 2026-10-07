@@ -1,5 +1,18 @@
 # Idea changelog
 
+## 2026-10-07 — Editable task relations
+
+- Capture detail: teams, people, and story are badge chips (× to remove, + opens a selector of existing roster/story entries).
+- `PATCH /api/tasks/{id}` updates `related_teams`, `related_employees`, and/or `story_id` (unknown ids dropped; story at most one).
+
+## 2026-10-07 — Stories + Jira summary
+
+- New roster `memory/stories.yaml`: id, title, optional `jira_key`, editable `summary`.
+- Tasks have at most one `story_id` (empty = none). GPT fill picks it from the story roster (title / jira key); server drops unknowns.
+- Stories UI at `/teams`-like `/stories` (sidebar list, add title, edit key + summary).
+- Optional Jira pull: `JIRA_BASE_URL` + `JIRA_TOKEN` (PAT Bearer). Setting/changing key or refresh seeds `summary` from the issue; summary stays manually editable.
+- Without Jira env, story CRUD still works; only refresh fails.
+
 ## 2026-10-07 — Teams badge editor
 
 - New team: name only.

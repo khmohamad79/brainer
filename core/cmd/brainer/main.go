@@ -8,6 +8,7 @@ import (
 	"brainer/internal/config"
 	"brainer/internal/fill"
 	"brainer/internal/gpt"
+	"brainer/internal/jira"
 	"brainer/internal/memory"
 )
 
@@ -27,6 +28,7 @@ func main() {
 			GPT:   client,
 			Store: store,
 		},
+		Jira: jira.New(cfg.JiraBaseURL, cfg.JiraToken),
 	}
 	log.Printf("brainer on %s (memory %s, model %s)", cfg.HTTPAddr, cfg.MemoryDir, cfg.GPTModel)
 	if err := http.ListenAndServe(cfg.HTTPAddr, srv.Handler()); err != nil {

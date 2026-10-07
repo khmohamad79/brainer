@@ -12,6 +12,7 @@ let selectedId = null;
 let listMode = "inbox";
 let pollTimer = null;
 let orgCache = null;
+let storiesCache = null;
 
 function readListParam() {
   const v = new URLSearchParams(location.search).get("list");
@@ -106,6 +107,19 @@ async function loadOrg() {
   }
 }
 
+async function loadStories() {
+  if (storiesCache) return storiesCache;
+  try {
+    const res = await fetch("/api/stories");
+    if (!res.ok) return { stories: [] };
+    storiesCache = await res.json();
+    if (!storiesCache.stories) storiesCache.stories = [];
+    return storiesCache;
+  } catch {
+    return { stories: [] };
+  }
+}
+
 async function refresh() {
   const q = listMode === "archive" ? "archived=1" : "archived=0";
   const res = await fetch("/api/tasks?" + q);
@@ -197,17 +211,19 @@ function renderDetail(t) {
       <dt>status</dt><dd>${escapeHtml(t.status)}</dd>
       <dt>requester</dt><dd dir="auto">${escapeHtml(t.requester || "—")}</dd>
       <dt>open</dt><dd dir="auto">${escapeHtml(qs)}</dd>
-      <dt>teams</dt><dd id="rel-teams">…</dd>
-      <dt>people</dt><dd id="rel-people">…</dd>
+      <dt>teams</dt><dd><div class="chip-row" id="rel-teams"></div></dd>
+      <dt>people</dt><dd><div class="chip-row" id="rel-people"></div></dd>
+      <dt>story</dt><dd><div class="chip-row" id="rel-story"></div></dd>
     </dl>
   `;
-  fillRelated(t);
+  renderRelations(t);
 
   const retry = document.getElementById("retry-fill");
   if (retry) {
     retry.addEventListener("click", async () => {
       retry.disabled = true;
       orgCache = null;
+      storiesCache = null;
       await fetch("/api/tasks/" + encodeURIComponent(t.id) + "/fill", { method: "POST" });
       const fresh = await fetchTask(t.id);
       if (fresh) renderDetail(fresh);
@@ -268,23 +284,201 @@ function renderDetail(t) {
   }
 }
 
-async function fillRelated(t) {
+async function renderRelations(t) {
   const teamsEl = document.getElementById("rel-teams");
   const peopleEl = document.getElementById("rel-people");
-  if (!teamsEl || !peopleEl) return;
-  const org = await loadOrg();
-  const teamNames = new Map();
-  const empNames = new Map();
+  const storyEl = document.getElementById("rel-story");
+  if (!teamsEl || !peopleEl || !storyEl) return;
+  const [org, storyList] = await Promise.all([loadOrg(), loadStories()]);
+  const teamOpts = (org.teams || []).map((team) => ({ id: team.id, label: team.name }));
+  const peopleOpts = [];
   for (const team of org.teams || []) {
-    teamNames.set(team.id, team.name);
     for (const e of team.employees || []) {
-      empNames.set(e.id, e.name);
+      peopleOpts.push({ id: e.id, label: e.name + " (" + team.name + ")" });
     }
   }
-  const teams = (t.related_teams || []).map((id) => teamNames.get(id) || id);
-  const people = (t.related_employees || []).map((id) => empNames.get(id) || id);
-  teamsEl.textContent = teams.length ? teams.join(", ") : "—";
-  peopleEl.textContent = people.length ? people.join(", ") : "—";
+  const storyOpts = (storyList.stories || []).map((s) => ({
+    id: s.id,
+    label: s.jira_key ? s.title + " · " + s.jira_key : s.title,
+  }));
+
+  mountMultiChips(teamsEl, t.related_teams || [], teamOpts, async (next) => {
+    const updated = await patchTask(t.id, { related_teams: next });
+    Object.assign(t, updated);
+    renderRelations(t);
+  });
+  mountMultiChips(peopleEl, t.related_employees || [], peopleOpts, async (next) => {
+    const updated = await patchTask(t.id, { related_employees: next });
+    Object.assign(t, updated);
+    renderRelations(t);
+  });
+  mountStoryChips(storyEl, t.story_id || "", storyOpts, async (next) => {
+    const updated = await patchTask(t.id, { story_id: next });
+    Object.assign(t, updated);
+    renderRelations(t);
+  });
+}
+
+function chipHTML(id, label) {
+  return (
+    `<span class="chip" data-id="${escapeHtml(id)}">` +
+    `<span class="chip-text">${escapeHtml(label)}</span>` +
+    `<button type="button" class="chip-x" data-remove="${escapeHtml(id)}" aria-label="Remove">×</button>` +
+    `</span>`
+  );
+}
+
+function mountMultiChips(el, selected, options, onChange) {
+  const selectedSet = new Set(selected);
+  const labelFor = new Map(options.map((o) => [o.id, o.label]));
+  const chips = selected.map((id) => chipHTML(id, labelFor.get(id) || id)).join("");
+  const available = options.filter((o) => !selectedSet.has(o.id));
+  el.innerHTML =
+    chips +
+    (available.length
+      ? `<button type="button" class="chip-add" data-add aria-label="Add">+</button>`
+      : "");
+
+  el.querySelectorAll("[data-remove]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-remove");
+      const next = selected.filter((x) => x !== id);
+      const done = memoryHold();
+      try {
+        await onChange(next);
+        saveStatus.textContent = "";
+      } catch (err) {
+        saveStatus.textContent = err.message;
+      } finally {
+        done();
+      }
+    });
+  });
+
+  const addBtn = el.querySelector("[data-add]");
+  if (addBtn) {
+    addBtn.addEventListener("click", () => {
+      openChipSelect(addBtn, available, async (id) => {
+        const next = selected.concat([id]);
+        const done = memoryHold();
+        try {
+          await onChange(next);
+          saveStatus.textContent = "";
+        } catch (err) {
+          saveStatus.textContent = err.message;
+        } finally {
+          done();
+        }
+      });
+    });
+  }
+}
+
+function mountStoryChips(el, storyId, options, onChange) {
+  const labelFor = new Map(options.map((o) => [o.id, o.label]));
+  if (storyId) {
+    el.innerHTML = chipHTML(storyId, labelFor.get(storyId) || storyId);
+    el.querySelector("[data-remove]").addEventListener("click", async () => {
+      const done = memoryHold();
+      try {
+        await onChange("");
+        saveStatus.textContent = "";
+      } catch (err) {
+        saveStatus.textContent = err.message;
+      } finally {
+        done();
+      }
+    });
+    return;
+  }
+  const available = options.slice();
+  el.innerHTML = available.length
+    ? `<button type="button" class="chip-add" data-add aria-label="Add story">+</button>`
+    : `<span class="muted">—</span>`;
+  const addBtn = el.querySelector("[data-add]");
+  if (!addBtn) return;
+  addBtn.addEventListener("click", () => {
+    openChipSelect(addBtn, available, async (id) => {
+      const done = memoryHold();
+      try {
+        await onChange(id);
+        saveStatus.textContent = "";
+      } catch (err) {
+        saveStatus.textContent = err.message;
+      } finally {
+        done();
+      }
+    });
+  });
+}
+
+function openChipSelect(addBtn, options, onPick) {
+  if (addBtn.previousElementSibling?.classList?.contains("chip-select")) {
+    addBtn.previousElementSibling.focus();
+    return;
+  }
+  const select = document.createElement("select");
+  select.className = "chip-select";
+  select.setAttribute("aria-label", "Choose");
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = "…";
+  select.appendChild(blank);
+  for (const o of options) {
+    const opt = document.createElement("option");
+    opt.value = o.id;
+    opt.textContent = o.label;
+    select.appendChild(opt);
+  }
+  addBtn.before(select);
+  addBtn.hidden = true;
+  select.focus();
+
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    select.remove();
+    addBtn.hidden = false;
+  };
+
+  select.addEventListener("change", async () => {
+    const id = select.value;
+    if (!id) {
+      close();
+      return;
+    }
+    select.disabled = true;
+    try {
+      await onPick(id);
+    } catch (err) {
+      saveStatus.textContent = err.message;
+      select.disabled = false;
+      return;
+    }
+    close();
+  });
+  select.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  });
+  select.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (!closed && document.activeElement !== select) close();
+    }, 0);
+  });
+}
+
+async function patchTask(id, body) {
+  const res = await fetch("/api/tasks/" + encodeURIComponent(id), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }
 
 function escapeHtml(s) {
@@ -304,6 +498,6 @@ if (listMode === "archive") {
   detailEl.hidden = false;
 }
 
-Promise.all([loadOrg(), refresh()]).catch((err) => {
+Promise.all([loadOrg(), loadStories(), refresh()]).catch((err) => {
   saveStatus.textContent = err.message;
 });

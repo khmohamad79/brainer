@@ -1,6 +1,6 @@
 # Memory
 
-Store: `{repo}/memory/tasks/{id}.yaml` for assignments, `{repo}/memory/org.yaml` for the company roster.  
+Store: `{repo}/memory/tasks/{id}.yaml` for assignments, `{repo}/memory/org.yaml` for the company roster, `{repo}/memory/stories.yaml` for stories.  
 `memory/` is gitignored.
 
 ## File schema
@@ -17,6 +17,7 @@ requester: ""
 open_questions: []
 related_teams: []      # team ids from org.yaml (related mentions)
 related_employees: []  # employee ids from org.yaml (related mentions)
+story_id: ""           # at most one story id from stories.yaml
 raw: |
   original message
 ```
@@ -61,3 +62,22 @@ Team and employee ids are slugs from the official name at create time (collision
 ## Task ↔ org relations
 
 Fill may set `related_teams` and `related_employees` to roster ids named or implied in `raw` (including nicknames). Mentions only — no assignee or other role. Unknown ids are discarded. Empty roster → leave both arrays empty.
+
+## Stories
+
+One YAML file, rewritten atomically (`tmp` + `fsync` + rename).
+
+```yaml
+stories:
+  - id: payment-timeout
+    title: Payment timeout
+    jira_key: DEVPR-5982   # optional
+    summary: |             # editable; may be seeded from Jira
+      ...
+```
+
+Story ids are slugs from the title at create time (collision suffix `_2`, `_3`) and stay stable if the title is edited later. Optional `jira_key` (e.g. `DEVPR-5982`). `summary` is free text: auto-filled when a key is set/changed or refreshed from Jira, then manually editable.
+
+## Task ↔ story
+
+Fill may set `story_id` to at most one story id named or implied in `raw` (title or jira key). Unknown ids become empty. Empty story roster → leave `story_id` empty. Deleting a story does not scrub task files.

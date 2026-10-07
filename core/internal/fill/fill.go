@@ -12,7 +12,8 @@ import (
 
 const systemPrompt = `You extract a few fields from an unstructured work assignment.
 
-You are also given a company roster (teams and employees with ids, names, nicknames).
+You are also given a company roster (teams and employees with ids, names, nicknames)
+and a story roster (stories with ids, titles, optional jira keys).
 Link the assignment to roster entries that are named or clearly implied in the text.
 
 Return a JSON object with exactly these keys:
@@ -20,11 +21,13 @@ Return a JSON object with exactly these keys:
 - open_questions: array of things missing to act
 - related_teams: array of team ids from the roster that the text relates to, or []
 - related_employees: array of employee ids from the roster that the text relates to, or []
+- story_id: at most one story id from the story roster, or empty string
 
 Rules:
 - Do not invent facts.
 - Write requester and open_questions in the same language as the assignment text. If the assignment is Persian, respond in Persian; if English, respond in English; match mixed language the same way.
 - related_teams and related_employees must use only ids listed in the roster. Prefer nickname matches. If nothing matches, use [].
+- story_id must be a story id from the story roster, matching title or jira key when clearly implied. If none or unclear, use "".
 - Related means mentions or clear implication only — not an assignee role.
 - Output JSON only.`
 
@@ -33,6 +36,7 @@ type result struct {
 	OpenQuestions    []string `json:"open_questions"`
 	RelatedTeams     []string `json:"related_teams"`
 	RelatedEmployees []string `json:"related_employees"`
+	StoryID          string   `json:"story_id"`
 }
 
 type Runner struct {
@@ -60,7 +64,12 @@ func (r *Runner) Fill(task *memory.Task) {
 		log.Printf("fill org %s: %v", rawID, orgErr)
 		org = &memory.Org{Teams: []memory.Team{}}
 	}
-	userMsg := buildUserMessage(rawBody, org)
+	stories, storiesErr := r.Store.Stories()
+	if storiesErr != nil {
+		log.Printf("fill stories %s: %v", rawID, storiesErr)
+		stories = &memory.StoryList{Stories: []memory.Story{}}
+	}
+	userMsg := buildUserMessage(rawBody, org, stories)
 
 	content, err := r.GPT.ChatJSON(systemPrompt, userMsg)
 	latest, getErr = r.Store.Get(rawID)
@@ -85,26 +94,38 @@ func (r *Runner) Fill(task *memory.Task) {
 		_ = r.Store.Save(latest)
 		return
 	}
-	apply(latest, parsed, org)
+	apply(latest, parsed, org, stories)
 	latest.Fill = memory.FillOK
 	latest.FillError = ""
 	_ = r.Store.Save(latest)
 }
 
-func buildUserMessage(raw string, org *memory.Org) string {
+func buildUserMessage(raw string, org *memory.Org, stories *memory.StoryList) string {
 	var b strings.Builder
 	b.WriteString("Assignment:\n")
 	b.WriteString(raw)
 	b.WriteString("\n\nCompany roster (use only these ids for related_teams / related_employees):\n")
 	if org == nil || len(org.Teams) == 0 {
 		b.WriteString("(empty — leave related_teams and related_employees as [])\n")
+	} else {
+		for _, t := range org.Teams {
+			b.WriteString(fmt.Sprintf("- team id=%s name=%q nicknames=%s\n", t.ID, t.Name, formatNicks(t.Nicknames)))
+			for _, e := range t.Employees {
+				b.WriteString(fmt.Sprintf("  - employee id=%s team=%s name=%q nicknames=%s\n", e.ID, t.ID, e.Name, formatNicks(e.Nicknames)))
+			}
+		}
+	}
+	b.WriteString("\nStory roster (use only these ids for story_id):\n")
+	if stories == nil || len(stories.Stories) == 0 {
+		b.WriteString("(empty — leave story_id as \"\")\n")
 		return b.String()
 	}
-	for _, t := range org.Teams {
-		b.WriteString(fmt.Sprintf("- team id=%s name=%q nicknames=%s\n", t.ID, t.Name, formatNicks(t.Nicknames)))
-		for _, e := range t.Employees {
-			b.WriteString(fmt.Sprintf("  - employee id=%s team=%s name=%q nicknames=%s\n", e.ID, t.ID, e.Name, formatNicks(e.Nicknames)))
+	for _, st := range stories.Stories {
+		key := st.JiraKey
+		if key == "" {
+			key = "(none)"
 		}
+		b.WriteString(fmt.Sprintf("- story id=%s title=%q jira_key=%s\n", st.ID, st.Title, key))
 	}
 	return b.String()
 }
@@ -135,12 +156,26 @@ func parseResult(content string) (result, error) {
 	return parsed, nil
 }
 
-func apply(t *memory.Task, r result, org *memory.Org) {
+func apply(t *memory.Task, r result, org *memory.Org, stories *memory.StoryList) {
 	t.Requester = strings.TrimSpace(r.Requester)
 	t.OpenQuestions = r.OpenQuestions
 	teams, emps := filterRelated(r.RelatedTeams, r.RelatedEmployees, org)
 	t.RelatedTeams = teams
 	t.RelatedEmployees = emps
+	t.StoryID = keepKnownStory(r.StoryID, stories)
+}
+
+func keepKnownStory(id string, stories *memory.StoryList) string {
+	id = strings.TrimSpace(id)
+	if id == "" || stories == nil {
+		return ""
+	}
+	for _, st := range stories.Stories {
+		if st.ID == id {
+			return id
+		}
+	}
+	return ""
 }
 
 func filterRelated(teamIDs, empIDs []string, org *memory.Org) ([]string, []string) {

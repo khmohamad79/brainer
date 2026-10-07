@@ -56,8 +56,13 @@ func TestBuildUserMessageIncludesRoster(t *testing.T) {
 			},
 		},
 	}
-	msg := buildUserMessage("Talk to Sara about plat login", org)
-	for _, want := range []string{"id=platform", "id=sara", "plat", "sari", "Talk to Sara"} {
+	stories := &memory.StoryList{
+		Stories: []memory.Story{
+			{ID: "payment-timeout", Title: "Payment timeout", JiraKey: "DEVPR-5982"},
+		},
+	}
+	msg := buildUserMessage("Talk to Sara about plat login DEVPR-5982", org, stories)
+	for _, want := range []string{"id=platform", "id=sara", "plat", "sari", "Talk to Sara", "id=payment-timeout", "DEVPR-5982"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("missing %q in:\n%s", want, msg)
 		}
@@ -65,9 +70,12 @@ func TestBuildUserMessageIncludesRoster(t *testing.T) {
 }
 
 func TestBuildUserMessageEmptyRoster(t *testing.T) {
-	msg := buildUserMessage("Fix login", &memory.Org{})
+	msg := buildUserMessage("Fix login", &memory.Org{}, &memory.StoryList{})
 	if !strings.Contains(msg, "empty") {
 		t.Fatalf("expected empty roster note: %s", msg)
+	}
+	if !strings.Contains(msg, `leave story_id as ""`) {
+		t.Fatalf("expected empty story note: %s", msg)
 	}
 }
 
@@ -77,12 +85,16 @@ func TestApplySetsRelated(t *testing.T) {
 			{ID: "platform", Name: "Platform", Employees: []memory.Employee{{ID: "sara", Name: "Sara"}}},
 		},
 	}
+	stories := &memory.StoryList{
+		Stories: []memory.Story{{ID: "payment-timeout", Title: "Payment timeout"}},
+	}
 	task := &memory.Task{}
 	apply(task, result{
 		Requester:        "Sara",
 		RelatedTeams:     []string{"platform", "nope"},
 		RelatedEmployees: []string{"sara"},
-	}, org)
+		StoryID:          "payment-timeout",
+	}, org, stories)
 	if task.Requester != "Sara" {
 		t.Fatalf("requester: %s", task.Requester)
 	}
@@ -91,5 +103,18 @@ func TestApplySetsRelated(t *testing.T) {
 	}
 	if len(task.RelatedEmployees) != 1 || task.RelatedEmployees[0] != "sara" {
 		t.Fatalf("emps: %+v", task.RelatedEmployees)
+	}
+	if task.StoryID != "payment-timeout" {
+		t.Fatalf("story_id: %q", task.StoryID)
+	}
+}
+
+func TestApplyDropsUnknownStory(t *testing.T) {
+	task := &memory.Task{}
+	apply(task, result{StoryID: "ghost"}, &memory.Org{}, &memory.StoryList{
+		Stories: []memory.Story{{ID: "payment-timeout", Title: "Payment timeout"}},
+	})
+	if task.StoryID != "" {
+		t.Fatalf("expected empty story_id, got %q", task.StoryID)
 	}
 }

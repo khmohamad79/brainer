@@ -35,6 +35,7 @@ type Task struct {
 	OpenQuestions    []string  `yaml:"open_questions" json:"open_questions"`
 	RelatedTeams     []string  `yaml:"related_teams" json:"related_teams"`
 	RelatedEmployees []string  `yaml:"related_employees" json:"related_employees"`
+	StoryID          string    `yaml:"story_id" json:"story_id"`
 	Raw              string    `yaml:"raw" json:"raw"`
 }
 

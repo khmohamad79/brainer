@@ -17,11 +17,11 @@ Not yet: prioritization, calendar, splitting into many files, multi-channel Slac
 | Input | Simple web UI |
 | Save | Auto-save on submit (no confirm) |
 | Granularity | 1 message = 1 YAML file |
-| Store | No DB — `memory/tasks/{id}.yaml` + `memory/org.yaml` (gitignored) |
+| Store | No DB — `memory/tasks/{id}.yaml` + `memory/org.yaml` + `memory/stories.yaml` (gitignored) |
 | Format | YAML |
-| UI | Separate package under `core/web`, same Go binary (no SPA); dark minimal chrome (top bar + right Inbox/Archive sidebar); Capture + Teams |
+| UI | Separate package under `core/web`, same Go binary (no SPA); dark minimal chrome (top bar + right Inbox/Archive sidebar); Capture + Teams + Stories |
 | GPT | OpenAI-compatible `POST {GPT_BASE_URL}/chat/completions` |
-| Env names | `GPT_BASE_URL`, `GPT_TOKEN`, `GPT_MODEL` (no provider prefix) |
+| Env names | `GPT_BASE_URL`, `GPT_TOKEN`, `GPT_MODEL`, `JIRA_BASE_URL`, `JIRA_TOKEN` (no provider prefix) |
 | `.env.example` | No real API URL committed |
 
 Working model id on the current provider: `/gpt-120` (not `gpt-4o-mini`).
@@ -38,7 +38,7 @@ Working model id on the current provider: `/gpt-120` (not `gpt-4o-mini`).
 
 ```
 UI submit → write YAML (fill: pending) → return id
-         → GPT fill (raw + org roster) → ok | failed (+ fill_error)
+         → GPT fill (raw + org roster + stories) → ok | failed (+ fill_error)
 ```
 
 ## Repo map
@@ -47,9 +47,9 @@ UI submit → write YAML (fill: pending) → return id
 idea/          living design (read first)
 core/          Go module
   cmd/brainer/
-  internal/{api,config,fill,gpt,memory}/
+  internal/{api,config,fill,gpt,jira,memory}/
   web/         embedded HTML/CSS/JS
-memory/        runtime store (gitignored): tasks/ + org.yaml
+memory/        runtime store (gitignored): tasks/ + org.yaml + stories.yaml
 .env           secrets (gitignored)
 README.md      human overview
 ```
@@ -57,7 +57,7 @@ README.md      human overview
 ## Run
 
 ```bash
-cp .env.example .env   # set GPT_BASE_URL, GPT_TOKEN
+cp .env.example .env   # set GPT_BASE_URL, GPT_TOKEN; optional JIRA_*
 cd core && go run ./cmd/brainer
 # http://127.0.0.1:8080
 ```
@@ -68,6 +68,7 @@ Restart after any `.env` change. `.env` overrides empty/stale shell env for thes
 
 - `POST /api/captures` `{ "raw": "..." }` → 201 once file exists
 - `GET /api/tasks?archived=0|1` (default `0` = inbox), `GET /api/tasks/{id}`
+- `PATCH /api/tasks/{id}` `{ "related_teams"?, "related_employees"?, "story_id"? }` — edit relations
 - `POST /api/tasks/{id}/fill` → retry
 - `POST /api/tasks/{id}/archive` → leave inbox; status unchanged
 - `DELETE /api/tasks/{id}` → remove file (archived only)
@@ -78,10 +79,15 @@ Restart after any `.env` change. `.env` overrides empty/stale shell env for thes
 - `POST /api/teams/{id}/employees` `{ "name": "...", "nicknames": ["..."] }`
 - `PATCH /api/teams/{id}/employees/{eid}` `{ "name": "...", "nicknames": ["..."] }`
 - `DELETE /api/teams/{id}/employees/{eid}`
+- `GET /api/stories` — story roster
+- `POST /api/stories` `{ "title": "...", "jira_key": "..." }`
+- `PATCH /api/stories/{id}` `{ "title": "...", "jira_key": "...", "summary": "..." }`
+- `DELETE /api/stories/{id}`
+- `POST /api/stories/{id}/jira-refresh` — re-fetch summary from Jira
 
 ## Task YAML (essentials)
 
-`id` (UTC timestamp), `status` (inbox|active|done), `archived` (bool), `fill` (pending|ok|failed), `fill_error`, `requester`, `open_questions`, `related_teams`, `related_employees`, `raw` (immutable).
+`id` (UTC timestamp), `status` (inbox|active|done), `archived` (bool), `fill` (pending|ok|failed), `fill_error`, `requester`, `open_questions`, `related_teams`, `related_employees`, `story_id`, `raw` (immutable).
 
 ## How to continue in a new session
 

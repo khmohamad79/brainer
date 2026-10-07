@@ -518,6 +518,28 @@ button.linkish:hover { color: var(--ink); }
   font-size: 0.85rem;
 }
 
+.chip-select {
+  max-width: 14rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font: 400 0.85rem/1.2 "DM Sans", sans-serif;
+}
+
+.chip-select:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.kv dd .chip-row {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
 .person-head {
   display: flex;
   align-items: center;
@@ -556,6 +578,50 @@ label {
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 0.3rem;
+}
+
+.story-field {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  padding: 0.35rem 0;
+  font: 500 0.95rem/1.4 "DM Sans", sans-serif;
+  color: inherit;
+}
+
+.story-field:focus {
+  outline: none;
+  border-bottom-color: var(--ink);
+}
+
+.story-summary {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--panel);
+  padding: 0.6rem 0.7rem;
+  font: 400 0.9rem/1.45 "DM Sans", sans-serif;
+  color: inherit;
+  resize: vertical;
+  min-height: 8rem;
+}
+
+.story-summary:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
 @media (max-width: 800px) {
