@@ -6,9 +6,9 @@ Feed this file (and optionally `idea/00-core.md`) into new chats so work continu
 
 Personal **assignment-capture** agent for a tech employee who gets unstructured tasks all day.
 
-Success metric: **never lose an assignment.** Persist raw text first; GPT structure second.
+Success metric: **never lose an assignment.** Persist raw text first; GPT fill second.
 
-Not yet: prioritization, calendar, auto-splitting into many files, multi-channel Slack ingest.
+Not yet: prioritization, calendar, splitting into many files, multi-channel Slack ingest.
 
 ## Locked decisions (v0)
 
@@ -16,10 +16,10 @@ Not yet: prioritization, calendar, auto-splitting into many files, multi-channel
 |-------|----------|
 | Input | Simple web UI |
 | Save | Auto-save on submit (no confirm) |
-| Granularity | 1 message = 1 YAML file; only **mark** `needs_split` + `split_candidates` |
+| Granularity | 1 message = 1 YAML file |
 | Store | No DB — `memory/tasks/{id}.yaml` + `memory/org.yaml` (gitignored) |
 | Format | YAML |
-| UI | Separate package under `core/web`, same Go binary (no SPA); Capture + Teams pages |
+| UI | Separate package under `core/web`, same Go binary (no SPA); Capture + Archive + Teams pages |
 | GPT | OpenAI-compatible `POST {GPT_BASE_URL}/chat/completions` |
 | Env names | `GPT_BASE_URL`, `GPT_TOKEN`, `GPT_MODEL` (no provider prefix) |
 | `.env.example` | No real API URL committed |
@@ -31,15 +31,14 @@ Working model id on the current provider: `/gpt-120` (not `gpt-4o-mini`).
 1. Write `raw` to disk **before** GPT; keep it if GPT fails.
 2. One message → one file.
 3. Auto-save.
-4. Split is a mark only (no auto child files).
-5. `memory/` is source of truth and gitignored.
-6. **Idea before code:** new feature → check `idea/` → if it breaks an invariant, reform idea docs + `CHANGELOG.md` → then change `core/`.
+4. `memory/` is source of truth and gitignored.
+5. **Idea before code:** new feature → check `idea/` → if it breaks an invariant, reform idea docs + `CHANGELOG.md` → then change `core/`.
 
 ## Pipeline
 
 ```
-UI submit → write YAML (enrichment: pending) → return id
-         → GPT enrich (raw + org roster) → ok | failed (+ enrichment_error)
+UI submit → write YAML (fill: pending) → return id
+         → GPT fill (raw + org roster) → ok | failed (+ fill_error)
 ```
 
 ## Repo map
@@ -48,7 +47,7 @@ UI submit → write YAML (enrichment: pending) → return id
 idea/          living design (read first)
 core/          Go module
   cmd/brainer/
-  internal/{api,config,enrich,gpt,memory}/
+  internal/{api,config,fill,gpt,memory}/
   web/         embedded HTML/CSS/JS
 memory/        runtime store (gitignored): tasks/ + org.yaml
 .env           secrets (gitignored)
@@ -68,8 +67,10 @@ Restart after any `.env` change. `.env` overrides empty/stale shell env for thes
 ## API
 
 - `POST /api/captures` `{ "raw": "..." }` → 201 once file exists
-- `GET /api/tasks`, `GET /api/tasks/{id}`
-- `POST /api/tasks/{id}/enrich` → retry
+- `GET /api/tasks?archived=0|1` (default `0` = inbox), `GET /api/tasks/{id}`
+- `POST /api/tasks/{id}/fill` → retry
+- `POST /api/tasks/{id}/archive` → leave inbox; status unchanged
+- `DELETE /api/tasks/{id}` → remove file (archived only)
 - `GET /api/org` — teams and employees
 - `POST /api/teams` `{ "name": "...", "nicknames": ["..."] }`
 - `PATCH /api/teams/{id}` `{ "name": "...", "nicknames": ["..."] }`
@@ -80,7 +81,7 @@ Restart after any `.env` change. `.env` overrides empty/stale shell env for thes
 
 ## Task YAML (essentials)
 
-`id`, `status` (inbox|active|done), `enrichment` (pending|ok|failed), `enrichment_error`, `needs_split`, `split_candidates`, `title`, `requester`, `due_at` (as stated, never invent), `priority`, `context`, `open_questions`, `related_teams`, `related_employees`, `raw` (immutable), `structured`.
+`id` (UTC timestamp), `status` (inbox|active|done), `archived` (bool), `fill` (pending|ok|failed), `fill_error`, `requester`, `open_questions`, `related_teams`, `related_employees`, `raw` (immutable).
 
 ## How to continue in a new session
 
@@ -91,4 +92,4 @@ Restart after any `.env` change. `.env` overrides empty/stale shell env for thes
 
 ## Intentionally deferred
 
-Auth, boards, auto-split into files, Slack/email ingest, scheduling, multi-agent orchestration, task assignee roles (related mentions only for now).
+Auth, boards, split into files, Slack/email ingest, scheduling, multi-agent orchestration, due/priority/context, task assignee roles (related mentions only for now).

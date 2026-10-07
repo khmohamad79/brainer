@@ -6,7 +6,7 @@ import (
 
 	"brainer/internal/api"
 	"brainer/internal/config"
-	"brainer/internal/enrich"
+	"brainer/internal/fill"
 	"brainer/internal/gpt"
 	"brainer/internal/memory"
 )
@@ -23,7 +23,7 @@ func main() {
 	client := gpt.New(cfg.GPTBaseURL, cfg.GPTToken, cfg.GPTModel)
 	srv := &api.Server{
 		Store: store,
-		Enrich: &enrich.Runner{
+		Fill: &fill.Runner{
 			GPT:   client,
 			Store: store,
 		},

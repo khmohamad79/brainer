@@ -18,8 +18,11 @@ func TestCaptureWritesRawFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if task.Enrichment != EnrichmentPending {
-		t.Fatalf("enrichment: %s", task.Enrichment)
+	if task.Fill != FillPending {
+		t.Fatalf("fill: %s", task.Fill)
+	}
+	if !strings.Contains(task.ID, "T") || strings.Contains(task.ID, "fix") {
+		t.Fatalf("id should be timestamp only: %s", task.ID)
 	}
 	if task.Raw != raw {
 		t.Fatalf("raw mismatch")
@@ -36,8 +39,43 @@ func TestCaptureWritesRawFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Title == "" {
-		t.Fatal("expected fallback title")
+	if got.Raw != raw {
+		t.Fatal("expected raw preserved on get")
+	}
+}
+
+func TestArchiveAndDelete(t *testing.T) {
+	dir := t.TempDir()
+	store, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := store.Capture("Archive me later")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inbox, err := store.List(false)
+	if err != nil || len(inbox) != 1 {
+		t.Fatalf("inbox: %+v %v", inbox, err)
+	}
+	if err := store.Delete(task.ID); err == nil {
+		t.Fatal("expected delete of non-archived to fail")
+	}
+	got, err := store.Archive(task.ID)
+	if err != nil || !got.Archived || got.Status != StatusInbox {
+		t.Fatalf("archive: %+v %v", got, err)
+	}
+	inbox, _ = store.List(false)
+	arch, _ := store.List(true)
+	if len(inbox) != 0 || len(arch) != 1 {
+		t.Fatalf("lists inbox=%d arch=%d", len(inbox), len(arch))
+	}
+	if err := store.Delete(task.ID); err != nil {
+		t.Fatal(err)
+	}
+	arch, _ = store.List(true)
+	if len(arch) != 0 {
+		t.Fatalf("expected empty archive: %+v", arch)
 	}
 }
 

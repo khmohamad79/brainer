@@ -1,8 +1,26 @@
 # Idea changelog
 
+## 2026-10-07 — Archive + delete
+
+- Tasks have `archived` (bool), separate from `status`. Archive from any status; status is left alone.
+- Inbox lists non-archived tasks only. Archive page lists archived tasks and can delete them (removes the YAML file).
+- APIs: `GET /api/tasks?archived=0|1`, `POST /api/tasks/{id}/archive`, `DELETE /api/tasks/{id}` (archived only).
+
+## 2026-10-07 — No title; fill in task language
+
+- Tasks have no `title` field. List/detail use the first line of `raw` (or id) as the label.
+- GPT fill writes free-text fields (`requester`, `open_questions`) in the same language as `raw`.
+
+## 2026-10-07 — Simpler tasks
+
+- Task id is a UTC timestamp only (collision suffix `_2`, `_3`).
+- GPT step renamed from enrichment to **fill** (`fill`, `fill_error`, `POST /api/tasks/{id}/fill`).
+- Dropped fields: `due_at`, `priority`, `context`, `structured`, `needs_split`, `split_candidates`.
+- No split marking. One message stays one file with fewer filled fields (requester, open questions, related teams/people).
+
 ## 2026-10-07 — Task ↔ org relations
 
-- Enrichment links each task to related team and employee ids from `memory/org.yaml` (mentions only; no assignee role).
+- Fill links each task to related team and employee ids from `memory/org.yaml` (mentions only; no assignee role).
 - New task fields: `related_teams`, `related_employees` (arrays of roster ids).
 - GPT receives the roster (names + nicknames); server drops unknown ids. Requester stays free text.
 
@@ -50,8 +68,8 @@
 ## 2026-10-05 — v0 capture agent
 
 - Capture channel: simple web UI.
-- Human-in-the-loop: auto-save; edit/split later.
-- Granularity: one message = one file; mark split candidates only.
+- Human-in-the-loop: auto-save; edit later.
+- Granularity: one message = one file.
 - Store: folder `memory/`, one YAML file per task, no DB.
 - Success metric: never lose an assignment (raw-first write).
 - Process: `idea/` first; reform core docs before code if a feature breaks an invariant.

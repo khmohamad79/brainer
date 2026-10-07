@@ -7,14 +7,14 @@ import (
 	"net/http"
 	"os"
 
-	"brainer/internal/enrich"
+	"brainer/internal/fill"
 	"brainer/internal/memory"
 	"brainer/web"
 )
 
 type Server struct {
-	Store  *memory.Store
-	Enrich *enrich.Runner
+	Store *memory.Store
+	Fill  *fill.Runner
 }
 
 type captureBody struct {
@@ -31,7 +31,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/captures", s.postCapture)
 	mux.HandleFunc("GET /api/tasks", s.listTasks)
 	mux.HandleFunc("GET /api/tasks/{id}", s.getTask)
-	mux.HandleFunc("POST /api/tasks/{id}/enrich", s.reEnrich)
+	mux.HandleFunc("POST /api/tasks/{id}/fill", s.reFill)
+	mux.HandleFunc("POST /api/tasks/{id}/archive", s.archiveTask)
+	mux.HandleFunc("DELETE /api/tasks/{id}", s.deleteTask)
 	mux.HandleFunc("GET /api/org", s.getOrg)
 	mux.HandleFunc("POST /api/teams", s.postTeam)
 	mux.HandleFunc("PATCH /api/teams/{id}", s.patchTeam)
@@ -41,6 +43,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/teams/{id}/employees/{eid}", s.deleteEmployee)
 	mux.Handle("GET /static/", http.FileServer(http.FS(web.Static)))
 	mux.HandleFunc("GET /{$}", s.index)
+	mux.HandleFunc("GET /archive", s.archivePage)
 	mux.HandleFunc("GET /teams", s.teamsPage)
 	return mux
 }
@@ -62,12 +65,13 @@ func (s *Server) postCapture(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	go s.Enrich.Enrich(task)
+	go s.Fill.Fill(task)
 	writeJSON(w, http.StatusCreated, task)
 }
 
 func (s *Server) listTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, err := s.Store.List()
+	archived := r.URL.Query().Get("archived") == "1"
+	tasks, err := s.Store.List(archived)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -88,26 +92,58 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, task)
 }
 
-func (s *Server) reEnrich(w http.ResponseWriter, r *http.Request) {
+func (s *Server) reFill(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	task, err := s.Store.Get(id)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	task.Enrichment = memory.EnrichmentPending
-	task.EnrichmentError = ""
+	task.Fill = memory.FillPending
+	task.FillError = ""
 	if err := s.Store.Save(task); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	go s.Enrich.Enrich(task)
+	go s.Fill.Fill(task)
 	writeJSON(w, http.StatusAccepted, task)
+}
+
+func (s *Server) archiveTask(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	task, err := s.Store.Archive(id)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
+}
+
+func (s *Server) deleteTask(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.Store.Delete(id); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	http.ServeFileFS(w, r, web.Pages, "index.html")
+}
+
+func (s *Server) archivePage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	http.ServeFileFS(w, r, web.Pages, "archive.html")
 }
 
 func (s *Server) teamsPage(w http.ResponseWriter, r *http.Request) {

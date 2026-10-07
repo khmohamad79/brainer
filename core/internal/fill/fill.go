@@ -1,4 +1,4 @@
-package enrich
+package fill
 
 import (
 	"encoding/json"
@@ -10,44 +10,29 @@ import (
 	"brainer/internal/memory"
 )
 
-const systemPrompt = `You extract a structured work assignment from unstructured text.
+const systemPrompt = `You extract a few fields from an unstructured work assignment.
 
 You are also given a company roster (teams and employees with ids, names, nicknames).
 Link the assignment to roster entries that are named or clearly implied in the text.
 
 Return a JSON object with exactly these keys:
-- title: short human label
 - requester: who asked, or empty string (free text; do not invent a roster id for this)
-- due_at: due date or phrase exactly as stated, or null if not stated. Never invent a calendar date.
-- priority: only if stated, else null
-- context: array of short strings (project, people, systems)
 - open_questions: array of things missing to act
-- needs_split: true if the message contains more than one distinct work item
-- split_candidates: if needs_split, array of {title, excerpt}; otherwise []
-- structured: 1-4 sentence summary of the assignment
 - related_teams: array of team ids from the roster that the text relates to, or []
 - related_employees: array of employee ids from the roster that the text relates to, or []
 
 Rules:
 - Do not invent facts.
-- One capture stays one task; only mark split candidates.
-- Keep title under 80 characters.
+- Write requester and open_questions in the same language as the assignment text. If the assignment is Persian, respond in Persian; if English, respond in English; match mixed language the same way.
 - related_teams and related_employees must use only ids listed in the roster. Prefer nickname matches. If nothing matches, use [].
 - Related means mentions or clear implication only — not an assignee role.
 - Output JSON only.`
 
 type result struct {
-	Title            string                  `json:"title"`
-	Requester        string                  `json:"requester"`
-	DueAt            *string                 `json:"due_at"`
-	Priority         *string                 `json:"priority"`
-	Context          []string                `json:"context"`
-	OpenQuestions    []string                `json:"open_questions"`
-	NeedsSplit       bool                    `json:"needs_split"`
-	SplitCandidates  []memory.SplitCandidate `json:"split_candidates"`
-	Structured       string                  `json:"structured"`
-	RelatedTeams     []string                `json:"related_teams"`
-	RelatedEmployees []string                `json:"related_employees"`
+	Requester        string   `json:"requester"`
+	OpenQuestions    []string `json:"open_questions"`
+	RelatedTeams     []string `json:"related_teams"`
+	RelatedEmployees []string `json:"related_employees"`
 }
 
 type Runner struct {
@@ -55,7 +40,7 @@ type Runner struct {
 	Store *memory.Store
 }
 
-func (r *Runner) Enrich(task *memory.Task) {
+func (r *Runner) Fill(task *memory.Task) {
 	rawID := task.ID
 	rawBody := task.Raw
 
@@ -63,16 +48,16 @@ func (r *Runner) Enrich(task *memory.Task) {
 	if getErr != nil {
 		return
 	}
-	latest.Enrichment = memory.EnrichmentPending
-	latest.EnrichmentError = ""
+	latest.Fill = memory.FillPending
+	latest.FillError = ""
 	if err := r.Store.Save(latest); err != nil {
-		log.Printf("enrich mark pending %s: %v", rawID, err)
+		log.Printf("fill mark pending %s: %v", rawID, err)
 		return
 	}
 
 	org, orgErr := r.Store.Org()
 	if orgErr != nil {
-		log.Printf("enrich org %s: %v", rawID, orgErr)
+		log.Printf("fill org %s: %v", rawID, orgErr)
 		org = &memory.Org{Teams: []memory.Team{}}
 	}
 	userMsg := buildUserMessage(rawBody, org)
@@ -86,26 +71,23 @@ func (r *Runner) Enrich(task *memory.Task) {
 		latest.Raw = rawBody
 	}
 	if err != nil {
-		log.Printf("enrich failed %s: %v", rawID, err)
-		latest.Enrichment = memory.EnrichmentFailed
-		latest.EnrichmentError = err.Error()
-		if strings.TrimSpace(latest.Title) == "" {
-			latest.Title = task.Title
-		}
+		log.Printf("fill failed %s: %v", rawID, err)
+		latest.Fill = memory.FillFailed
+		latest.FillError = err.Error()
 		_ = r.Store.Save(latest)
 		return
 	}
 	parsed, parseErr := parseResult(content)
 	if parseErr != nil {
-		log.Printf("enrich parse %s: %v", rawID, parseErr)
-		latest.Enrichment = memory.EnrichmentFailed
-		latest.EnrichmentError = parseErr.Error()
+		log.Printf("fill parse %s: %v", rawID, parseErr)
+		latest.Fill = memory.FillFailed
+		latest.FillError = parseErr.Error()
 		_ = r.Store.Save(latest)
 		return
 	}
 	apply(latest, parsed, org)
-	latest.Enrichment = memory.EnrichmentOK
-	latest.EnrichmentError = ""
+	latest.Fill = memory.FillOK
+	latest.FillError = ""
 	_ = r.Store.Save(latest)
 }
 
@@ -148,26 +130,14 @@ func parseResult(content string) (result, error) {
 	}
 	var parsed result
 	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
-		return result{}, fmt.Errorf("enrich json: %w", err)
+		return result{}, fmt.Errorf("fill json: %w", err)
 	}
 	return parsed, nil
 }
 
 func apply(t *memory.Task, r result, org *memory.Org) {
-	if strings.TrimSpace(r.Title) != "" {
-		t.Title = strings.TrimSpace(r.Title)
-	}
 	t.Requester = strings.TrimSpace(r.Requester)
-	t.DueAt = emptyToNil(r.DueAt)
-	t.Priority = emptyToNil(r.Priority)
-	t.Context = r.Context
 	t.OpenQuestions = r.OpenQuestions
-	t.NeedsSplit = r.NeedsSplit
-	t.SplitCandidates = r.SplitCandidates
-	t.Structured = strings.TrimSpace(r.Structured)
-	if !t.NeedsSplit {
-		t.SplitCandidates = []memory.SplitCandidate{}
-	}
 	teams, emps := filterRelated(r.RelatedTeams, r.RelatedEmployees, org)
 	t.RelatedTeams = teams
 	t.RelatedEmployees = emps
@@ -205,15 +175,4 @@ func keepKnown(ids []string, known map[string]struct{}) []string {
 		out = append(out, id)
 	}
 	return out
-}
-
-func emptyToNil(s *string) *string {
-	if s == nil {
-		return nil
-	}
-	v := strings.TrimSpace(*s)
-	if v == "" || v == "null" {
-		return nil
-	}
-	return &v
 }

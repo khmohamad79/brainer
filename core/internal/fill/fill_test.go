@@ -1,4 +1,4 @@
-package enrich
+package fill
 
 import (
 	"strings"
@@ -79,12 +79,12 @@ func TestApplySetsRelated(t *testing.T) {
 	}
 	task := &memory.Task{}
 	apply(task, result{
-		Title:            "Login",
+		Requester:        "Sara",
 		RelatedTeams:     []string{"platform", "nope"},
 		RelatedEmployees: []string{"sara"},
 	}, org)
-	if task.Title != "Login" {
-		t.Fatalf("title: %s", task.Title)
+	if task.Requester != "Sara" {
+		t.Fatalf("requester: %s", task.Requester)
 	}
 	if len(task.RelatedTeams) != 1 || task.RelatedTeams[0] != "platform" {
 		t.Fatalf("teams: %+v", task.RelatedTeams)

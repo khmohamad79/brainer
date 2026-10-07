@@ -15,38 +15,27 @@ import (
 )
 
 const (
-	StatusInbox       = "inbox"
-	EnrichmentPending = "pending"
-	EnrichmentOK      = "ok"
-	EnrichmentFailed  = "failed"
-	SourceWeb         = "web"
+	StatusInbox = "inbox"
+	FillPending = "pending"
+	FillOK      = "ok"
+	FillFailed  = "failed"
+	SourceWeb   = "web"
 )
 
-type SplitCandidate struct {
-	Title   string `yaml:"title" json:"title"`
-	Excerpt string `yaml:"excerpt" json:"excerpt"`
-}
-
 type Task struct {
-	ID               string           `yaml:"id" json:"id"`
-	Status           string           `yaml:"status" json:"status"`
-	CreatedAt        time.Time        `yaml:"created_at" json:"created_at"`
-	UpdatedAt        time.Time        `yaml:"updated_at" json:"updated_at"`
-	Source           string           `yaml:"source" json:"source"`
-	Enrichment       string           `yaml:"enrichment" json:"enrichment"`
-	EnrichmentError  string           `yaml:"enrichment_error,omitempty" json:"enrichment_error,omitempty"`
-	NeedsSplit       bool             `yaml:"needs_split" json:"needs_split"`
-	SplitCandidates  []SplitCandidate `yaml:"split_candidates" json:"split_candidates"`
-	Title            string           `yaml:"title" json:"title"`
-	Requester        string           `yaml:"requester" json:"requester"`
-	DueAt            *string          `yaml:"due_at" json:"due_at"`
-	Priority         *string          `yaml:"priority" json:"priority"`
-	Context          []string         `yaml:"context" json:"context"`
-	OpenQuestions    []string         `yaml:"open_questions" json:"open_questions"`
-	RelatedTeams     []string         `yaml:"related_teams" json:"related_teams"`
-	RelatedEmployees []string         `yaml:"related_employees" json:"related_employees"`
-	Raw              string           `yaml:"raw" json:"raw"`
-	Structured       string           `yaml:"structured" json:"structured"`
+	ID               string    `yaml:"id" json:"id"`
+	Status           string    `yaml:"status" json:"status"`
+	Archived         bool      `yaml:"archived" json:"archived"`
+	CreatedAt        time.Time `yaml:"created_at" json:"created_at"`
+	UpdatedAt        time.Time `yaml:"updated_at" json:"updated_at"`
+	Source           string    `yaml:"source" json:"source"`
+	Fill             string    `yaml:"fill" json:"fill"`
+	FillError        string    `yaml:"fill_error,omitempty" json:"fill_error,omitempty"`
+	Requester        string    `yaml:"requester" json:"requester"`
+	OpenQuestions    []string  `yaml:"open_questions" json:"open_questions"`
+	RelatedTeams     []string  `yaml:"related_teams" json:"related_teams"`
+	RelatedEmployees []string  `yaml:"related_employees" json:"related_employees"`
+	Raw              string    `yaml:"raw" json:"raw"`
 }
 
 type Store struct {
@@ -71,20 +60,17 @@ func (s *Store) Capture(raw string) (*Task, error) {
 	now := time.Now().UTC()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id := s.uniqueID(raw, now)
+	id := s.uniqueID(now)
 	t := &Task{
 		ID:               id,
 		Status:           StatusInbox,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 		Source:           SourceWeb,
-		Enrichment:       EnrichmentPending,
-		SplitCandidates:  []SplitCandidate{},
-		Context:          []string{},
+		Fill:             FillPending,
 		OpenQuestions:    []string{},
 		RelatedTeams:     []string{},
 		RelatedEmployees: []string{},
-		Title:            fallbackTitle(raw),
 		Raw:              raw,
 	}
 	if err := s.writeLocked(t); err != nil {
@@ -108,7 +94,7 @@ func (s *Store) Get(id string) (*Task, error) {
 	return &t, nil
 }
 
-func (s *Store) List() ([]*Task, error) {
+func (s *Store) List(archived bool) ([]*Task, error) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		return nil, err
@@ -121,6 +107,9 @@ func (s *Store) List() ([]*Task, error) {
 		id := strings.TrimSuffix(e.Name(), ".yaml")
 		t, err := s.Get(id)
 		if err != nil {
+			continue
+		}
+		if t.Archived != archived {
 			continue
 		}
 		tasks = append(tasks, t)
@@ -138,13 +127,35 @@ func (s *Store) Save(t *Task) error {
 	return s.writeLocked(t)
 }
 
+func (s *Store) Archive(id string) (*Task, error) {
+	t, err := s.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	t.Archived = true
+	if err := s.Save(t); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (s *Store) Delete(id string) error {
+	if !safeID(id) {
+		return os.ErrNotExist
+	}
+	t, err := s.Get(id)
+	if err != nil {
+		return err
+	}
+	if !t.Archived {
+		return fmt.Errorf("delete only allowed for archived tasks")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return os.Remove(s.path(id))
+}
+
 func (s *Store) writeLocked(t *Task) error {
-	if t.SplitCandidates == nil {
-		t.SplitCandidates = []SplitCandidate{}
-	}
-	if t.Context == nil {
-		t.Context = []string{}
-	}
 	if t.OpenQuestions == nil {
 		t.OpenQuestions = []string{}
 	}
@@ -185,8 +196,8 @@ func (s *Store) path(id string) string {
 	return filepath.Join(s.dir, id+".yaml")
 }
 
-func (s *Store) uniqueID(raw string, now time.Time) string {
-	base := now.Format("20060102T150405Z") + "_" + slug(raw)
+func (s *Store) uniqueID(now time.Time) string {
+	base := now.Format("20060102T150405Z")
 	id := base
 	for n := 2; fileExists(s.path(id)); n++ {
 		id = fmt.Sprintf("%s_%d", base, n)
@@ -219,17 +230,6 @@ func slug(raw string) string {
 		return "task"
 	}
 	return s
-}
-
-func fallbackTitle(raw string) string {
-	line := firstLine(raw)
-	if line == "" {
-		return "Untitled assignment"
-	}
-	if len(line) > 80 {
-		return strings.TrimSpace(line[:80]) + "…"
-	}
-	return line
 }
 
 func firstLine(raw string) string {

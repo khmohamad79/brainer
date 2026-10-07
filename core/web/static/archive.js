@@ -1,39 +1,9 @@
 const listEl = document.getElementById("list");
 const detailEl = document.getElementById("detail");
-const form = document.getElementById("capture");
-const rawEl = document.getElementById("raw");
-const saveBtn = document.getElementById("save");
-const saveStatus = document.getElementById("save-status");
+const pageStatus = document.getElementById("page-status");
 
 let selectedId = null;
-let pollTimer = null;
 let orgCache = null;
-
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const raw = rawEl.value.trim();
-  if (!raw) return;
-  saveBtn.disabled = true;
-  const done = memoryHold();
-  try {
-    const res = await fetch("/api/captures", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raw }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const task = await res.json();
-    rawEl.value = "";
-    saveStatus.textContent = "";
-    selectedId = task.id;
-    await refresh();
-  } catch (err) {
-    saveStatus.textContent = "Save failed: " + err.message;
-  } finally {
-    done();
-    saveBtn.disabled = false;
-  }
-});
 
 async function loadOrg() {
   if (orgCache) return orgCache;
@@ -49,7 +19,7 @@ async function loadOrg() {
 }
 
 async function refresh() {
-  const res = await fetch("/api/tasks?archived=0");
+  const res = await fetch("/api/tasks?archived=1");
   const tasks = await res.json();
   renderList(tasks);
   if (selectedId) {
@@ -63,16 +33,10 @@ async function refresh() {
   }
 }
 
-async function fetchTask(id) {
-  const res = await fetch("/api/tasks/" + encodeURIComponent(id));
-  if (!res.ok) return null;
-  return res.json();
-}
-
 function renderList(tasks) {
   listEl.innerHTML = "";
   if (!tasks.length) {
-    listEl.innerHTML = "<li class='muted' style='padding:0.8rem 0'>Nothing captured yet.</li>";
+    listEl.innerHTML = "<li class='muted' style='padding:0.8rem 0'>Archive is empty.</li>";
     return;
   }
   for (const t of tasks) {
@@ -82,7 +46,7 @@ function renderList(tasks) {
     btn.className = "item" + (t.id === selectedId ? " active" : "");
     btn.innerHTML =
       `<span class="item-title" dir="auto">${escapeHtml(taskLabel(t))}</span>` +
-      `<span class="item-meta">${badges(t)}</span>`;
+      `<span class="item-meta"><span>${escapeHtml(t.status)}</span></span>`;
     btn.addEventListener("click", () => {
       selectedId = t.id;
       renderDetail(t);
@@ -91,10 +55,6 @@ function renderList(tasks) {
     li.appendChild(btn);
     listEl.appendChild(li);
   }
-}
-
-function badges(t) {
-  return `<span>${escapeHtml(t.status)}</span>`;
 }
 
 function taskLabel(t) {
@@ -106,19 +66,13 @@ function taskLabel(t) {
   return line.length > 80 ? line.slice(0, 80).trim() + "…" : line;
 }
 
-const refreshIcon = `<svg class="icon-refresh" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`;
-
 function renderDetail(t) {
   const qs = (t.open_questions || []).join(" · ") || "—";
-  const filled = t.fill === "ok";
   detailEl.className = "detail";
   detailEl.innerHTML = `
-    <div class="detail-top">
-      <pre class="raw raw-top" dir="auto">${escapeHtml(t.raw || "")}</pre>
-      <button type="button" id="retry-fill" class="icon-btn ${filled ? "filled" : ""}" title="Refresh fill" aria-label="Refresh fill">${refreshIcon}</button>
-    </div>
+    <pre class="raw raw-top" dir="auto">${escapeHtml(t.raw || "")}</pre>
     <div class="row" style="margin:0 0 1rem">
-      <button type="button" id="archive-task" class="ghost">Archive</button>
+      <button type="button" id="delete-task" class="danger">Delete</button>
     </div>
     <dl class="kv">
       <dt>id</dt><dd>${escapeHtml(t.id)}</dd>
@@ -130,45 +84,27 @@ function renderDetail(t) {
     </dl>
   `;
   fillRelated(t);
-  const retry = document.getElementById("retry-fill");
-  if (retry) {
-    retry.addEventListener("click", async () => {
-      retry.disabled = true;
-      orgCache = null;
-      await fetch("/api/tasks/" + encodeURIComponent(t.id) + "/fill", { method: "POST" });
-      const fresh = await fetchTask(t.id);
-      if (fresh) renderDetail(fresh);
-      refresh();
-    });
-  }
-  const archiveBtn = document.getElementById("archive-task");
-  if (archiveBtn) {
-    archiveBtn.addEventListener("click", async () => {
-      archiveBtn.disabled = true;
+  const del = document.getElementById("delete-task");
+  if (del) {
+    del.addEventListener("click", async () => {
+      if (!confirm("Delete this archived task from disk?")) return;
+      del.disabled = true;
       const done = memoryHold();
       try {
-        const res = await fetch("/api/tasks/" + encodeURIComponent(t.id) + "/archive", { method: "POST" });
+        const res = await fetch("/api/tasks/" + encodeURIComponent(t.id), { method: "DELETE" });
         if (!res.ok) throw new Error(await res.text());
         selectedId = null;
-        saveStatus.textContent = "";
+        pageStatus.textContent = "";
         await refresh();
+        detailEl.className = "detail empty";
+        detailEl.innerHTML = `<p class="muted">Select a task.</p>`;
       } catch (err) {
-        saveStatus.textContent = "Archive failed: " + err.message;
-        archiveBtn.disabled = false;
+        pageStatus.textContent = "Delete failed: " + err.message;
+        del.disabled = false;
       } finally {
         done();
       }
     });
-  }
-  clearTimeout(pollTimer);
-  if (t.fill === "pending") {
-    pollTimer = setTimeout(async () => {
-      const fresh = await fetchTask(t.id);
-      if (fresh && !fresh.archived) {
-        renderDetail(fresh);
-        refresh();
-      }
-    }, 1200);
   }
 }
 
@@ -200,5 +136,5 @@ function escapeHtml(s) {
 }
 
 Promise.all([loadOrg(), refresh()]).catch((err) => {
-  saveStatus.textContent = "Could not load tasks: " + err.message;
+  pageStatus.textContent = "Could not load archive: " + err.message;
 });
