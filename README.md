@@ -10,7 +10,7 @@ Tasks arrive unstructured. Brainer is not a full project manager yet. It is a ca
 
 1. You paste one message in a web UI.
 2. One YAML file is written under `memory/tasks/` immediately (auto-save).
-3. GPT enriches the same file (title, due phrase, context, open questions).
+3. GPT enriches the same file (title, due phrase, context, open questions) and links related teams/people from `memory/org.yaml` when names or nicknames match.
 4. If the message looks like several work items, Brainer **marks** split candidates — it does not create extra files yet.
 
 Living design notes live in [`idea/`](idea/). For a new AI/chat session, start with [`idea/CONTEXT.md`](idea/CONTEXT.md). Before any new feature:
@@ -33,12 +33,12 @@ brainer/
 │   │   ├── gpt/          # OpenAI-compatible GPT client
 │   │   └── memory/       # YAML file store
 │   └── web/              # UI (HTML/CSS/JS), served by the same binary
-├── memory/               # runtime task store (gitignored)
+├── memory/               # runtime store (gitignored): tasks + org.yaml
 ├── .env                  # secrets + config (gitignored)
 └── .env.example
 ```
 
-Each task is one YAML file, e.g. `memory/tasks/20261005T141409Z_fix-login-bug.yaml`.
+Each task is one YAML file, e.g. `memory/tasks/20261005T141409Z_fix-login-bug.yaml`. Enrichment may set `related_teams` and `related_employees` to roster ids from `memory/org.yaml` (related mentions only).
 
 ## Requirements
 
@@ -73,7 +73,7 @@ cd core
 go run ./cmd/brainer
 ```
 
-Open [http://127.0.0.1:8080](http://127.0.0.1:8080).
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080). Teams and employees: [http://127.0.0.1:8080/teams](http://127.0.0.1:8080/teams).
 
 Paste an assignment → **Record**. The task appears in the inbox even if GPT fails; use **Retry enrich** on the detail pane if needed.
 
@@ -85,6 +85,13 @@ Paste an assignment → **Record**. The task appears in the inbox even if GPT fa
 | `GET` | `/api/tasks` | List tasks |
 | `GET` | `/api/tasks/{id}` | Task detail |
 | `POST` | `/api/tasks/{id}/enrich` | Retry enrich |
+| `GET` | `/api/org` | Teams and employees |
+| `POST` | `/api/teams` | Create team (name, optional nicknames) |
+| `PATCH` | `/api/teams/{id}` | Update team name and/or nicknames |
+| `DELETE` | `/api/teams/{id}` | Remove team |
+| `POST` | `/api/teams/{id}/employees` | Add employee (name, optional nicknames) |
+| `PATCH` | `/api/teams/{id}/employees/{eid}` | Update employee name and/or nicknames |
+| `DELETE` | `/api/teams/{id}/employees/{eid}` | Remove employee |
 
 ## Invariants (short)
 

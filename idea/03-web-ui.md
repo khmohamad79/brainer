@@ -4,9 +4,14 @@ Separate package under `core/web`, same binary. No second service. No SPA framew
 
 ## Screens
 
-1. **Capture** — textarea + Record. Auto-save on submit.
+1. **Capture** (`/`) — textarea + Record. Auto-save on submit.
 2. **List** — recent tasks: title (or first line), status, `needs_split` badge, enrichment warning.
-3. **Detail** — raw + structured fields. Poll while `enrichment: pending`.
+3. **Detail** — raw + structured fields, including related teams/people from enrichment. Poll while `enrichment: pending`.
+4. **Teams** (`/teams`) — define team and employee names plus optional nicknames; persist to `memory/org.yaml`. Name and nickname edits auto-save after a short pause (no Save button).
+
+## Chrome
+
+A sticky top bar on every page. Centered text is empty when everything is on disk. While a write is waiting or in flight it shows `Memorizing ...`.
 
 ## Rules
 

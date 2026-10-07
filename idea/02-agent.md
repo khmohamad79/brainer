@@ -37,9 +37,11 @@ cd core && go run ./cmd/brainer
 
 OpenAI-compatible `POST {base}/chat/completions` with `Authorization: Bearer {token}`.
 
-Enrichment asks for JSON only: title, requester, due_at, priority, context, open_questions, needs_split, split_candidates, structured.
+Enrichment asks for JSON only: title, requester, due_at, priority, context, open_questions, needs_split, split_candidates, structured, related_teams, related_employees.
 
 Do not invent due dates. Copy what the source said, or leave null.
+
+Before calling GPT, load `org.yaml` and include a compact roster (team/employee ids, names, nicknames) in the user message. GPT may only return those ids for `related_teams` / `related_employees`. Server intersects with the current roster and drops unknowns. Empty roster → leave relation arrays empty.
 
 If the call fails, keep the file, set `enrichment: failed`.
 

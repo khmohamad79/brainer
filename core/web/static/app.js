@@ -7,13 +7,14 @@ const saveStatus = document.getElementById("save-status");
 
 let selectedId = null;
 let pollTimer = null;
+let orgCache = null;
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const raw = rawEl.value.trim();
   if (!raw) return;
   saveBtn.disabled = true;
-  saveStatus.textContent = "Saving…";
+  const done = memoryHold();
   try {
     const res = await fetch("/api/captures", {
       method: "POST",
@@ -23,15 +24,29 @@ form.addEventListener("submit", async (e) => {
     if (!res.ok) throw new Error(await res.text());
     const task = await res.json();
     rawEl.value = "";
-    saveStatus.textContent = "Saved to disk.";
+    saveStatus.textContent = "";
     selectedId = task.id;
     await refresh();
   } catch (err) {
     saveStatus.textContent = "Save failed: " + err.message;
   } finally {
+    done();
     saveBtn.disabled = false;
   }
 });
+
+async function loadOrg() {
+  if (orgCache) return orgCache;
+  try {
+    const res = await fetch("/api/org");
+    if (!res.ok) return { teams: [] };
+    orgCache = await res.json();
+    if (!orgCache.teams) orgCache.teams = [];
+    return orgCache;
+  } catch {
+    return { teams: [] };
+  }
+}
 
 async function refresh() {
   const res = await fetch("/api/tasks");
@@ -106,6 +121,8 @@ function renderDetail(t) {
       <dt>priority</dt><dd>${escapeHtml(pri)}</dd>
       <dt>context</dt><dd>${escapeHtml(ctx)}</dd>
       <dt>open</dt><dd>${escapeHtml(qs)}</dd>
+      <dt>teams</dt><dd id="rel-teams">…</dd>
+      <dt>people</dt><dd id="rel-people">…</dd>
     </dl>
     ${t.needs_split ? `<p class="badge split">Candidate for splitting</p><ul>${splits}</ul>` : ""}
     <h2>Raw</h2>
@@ -113,10 +130,12 @@ function renderDetail(t) {
     <h2>Structured</h2>
     <pre class="structured" dir="auto">${escapeHtml(structuredBody(t))}</pre>
   `;
+  fillRelated(t);
   const retry = document.getElementById("retry-enrich");
   if (retry) {
     retry.addEventListener("click", async () => {
       retry.disabled = true;
+      orgCache = null;
       await fetch("/api/tasks/" + encodeURIComponent(t.id) + "/enrich", { method: "POST" });
       const fresh = await fetchTask(t.id);
       if (fresh) renderDetail(fresh);
@@ -133,6 +152,25 @@ function renderDetail(t) {
       }
     }, 1200);
   }
+}
+
+async function fillRelated(t) {
+  const teamsEl = document.getElementById("rel-teams");
+  const peopleEl = document.getElementById("rel-people");
+  if (!teamsEl || !peopleEl) return;
+  const org = await loadOrg();
+  const teamNames = new Map();
+  const empNames = new Map();
+  for (const team of org.teams || []) {
+    teamNames.set(team.id, team.name);
+    for (const e of team.employees || []) {
+      empNames.set(e.id, e.name);
+    }
+  }
+  const teams = (t.related_teams || []).map((id) => teamNames.get(id) || id);
+  const people = (t.related_employees || []).map((id) => empNames.get(id) || id);
+  teamsEl.textContent = teams.length ? teams.join(", ") : "—";
+  peopleEl.textContent = people.length ? people.join(", ") : "—";
 }
 
 function structuredStatus(t) {
@@ -156,6 +194,6 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-refresh().catch((err) => {
+Promise.all([loadOrg(), refresh()]).catch((err) => {
   saveStatus.textContent = "Could not load tasks: " + err.message;
 });

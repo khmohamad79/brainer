@@ -2,7 +2,7 @@ package web
 
 import "embed"
 
-//go:embed index.html
+//go:embed index.html teams.html
 var Pages embed.FS
 
 //go:embed static

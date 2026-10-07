@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"os"
 
 	"brainer/internal/enrich"
 	"brainer/internal/memory"
@@ -19,14 +21,27 @@ type captureBody struct {
 	Raw string `json:"raw"`
 }
 
+type rosterBody struct {
+	Name      *string   `json:"name"`
+	Nicknames *[]string `json:"nicknames"`
+}
+
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/captures", s.postCapture)
 	mux.HandleFunc("GET /api/tasks", s.listTasks)
 	mux.HandleFunc("GET /api/tasks/{id}", s.getTask)
 	mux.HandleFunc("POST /api/tasks/{id}/enrich", s.reEnrich)
+	mux.HandleFunc("GET /api/org", s.getOrg)
+	mux.HandleFunc("POST /api/teams", s.postTeam)
+	mux.HandleFunc("PATCH /api/teams/{id}", s.patchTeam)
+	mux.HandleFunc("DELETE /api/teams/{id}", s.deleteTeam)
+	mux.HandleFunc("POST /api/teams/{id}/employees", s.postEmployee)
+	mux.HandleFunc("PATCH /api/teams/{id}/employees/{eid}", s.patchEmployee)
+	mux.HandleFunc("DELETE /api/teams/{id}/employees/{eid}", s.deleteEmployee)
 	mux.Handle("GET /static/", http.FileServer(http.FS(web.Static)))
 	mux.HandleFunc("GET /{$}", s.index)
+	mux.HandleFunc("GET /teams", s.teamsPage)
 	return mux
 }
 
@@ -93,6 +108,130 @@ func (s *Server) reEnrich(w http.ResponseWriter, r *http.Request) {
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	http.ServeFileFS(w, r, web.Pages, "index.html")
+}
+
+func (s *Server) teamsPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	http.ServeFileFS(w, r, web.Pages, "teams.html")
+}
+
+func (s *Server) getOrg(w http.ResponseWriter, r *http.Request) {
+	org, err := s.Store.Org()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, org)
+}
+
+func (s *Server) postTeam(w http.ResponseWriter, r *http.Request) {
+	in, ok := readRoster(w, r)
+	if !ok {
+		return
+	}
+	if in.Name == nil {
+		http.Error(w, "name is empty", http.StatusBadRequest)
+		return
+	}
+	team, err := s.Store.AddTeam(*in.Name, derefNicks(in.Nicknames))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, team)
+}
+
+func (s *Server) patchTeam(w http.ResponseWriter, r *http.Request) {
+	in, ok := readRoster(w, r)
+	if !ok {
+		return
+	}
+	team, err := s.Store.UpdateTeam(r.PathValue("id"), in.Name, in.Nicknames)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, team)
+}
+
+func (s *Server) deleteTeam(w http.ResponseWriter, r *http.Request) {
+	if err := s.Store.DeleteTeam(r.PathValue("id")); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) postEmployee(w http.ResponseWriter, r *http.Request) {
+	in, ok := readRoster(w, r)
+	if !ok {
+		return
+	}
+	if in.Name == nil {
+		http.Error(w, "name is empty", http.StatusBadRequest)
+		return
+	}
+	emp, err := s.Store.AddEmployee(r.PathValue("id"), *in.Name, derefNicks(in.Nicknames))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusCreated, emp)
+}
+
+func (s *Server) patchEmployee(w http.ResponseWriter, r *http.Request) {
+	in, ok := readRoster(w, r)
+	if !ok {
+		return
+	}
+	emp, err := s.Store.UpdateEmployee(r.PathValue("id"), r.PathValue("eid"), in.Name, in.Nicknames)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, emp)
+}
+
+func (s *Server) deleteEmployee(w http.ResponseWriter, r *http.Request) {
+	if err := s.Store.DeleteEmployee(r.PathValue("id"), r.PathValue("eid")); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func readRoster(w http.ResponseWriter, r *http.Request) (rosterBody, bool) {
+	defer r.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	if err != nil {
+		http.Error(w, "read body", http.StatusBadRequest)
+		return rosterBody{}, false
+	}
+	var in rosterBody
+	if err := json.Unmarshal(body, &in); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return rosterBody{}, false
+	}
+	return in, true
+}
+
+func derefNicks(nicks *[]string) []string {
+	if nicks == nil {
+		return nil
+	}
+	return *nicks
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

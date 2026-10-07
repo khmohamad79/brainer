@@ -1,5 +1,36 @@
 # Idea changelog
 
+## 2026-10-07 — Task ↔ org relations
+
+- Enrichment links each task to related team and employee ids from `memory/org.yaml` (mentions only; no assignee role).
+- New task fields: `related_teams`, `related_employees` (arrays of roster ids).
+- GPT receives the roster (names + nicknames); server drops unknown ids. Requester stays free text.
+
+## 2026-10-06 — Memory status bar
+
+- Every page has a sticky top bar. Centered `Memorizing ...` while anything is not yet written to `memory/`.
+
+## 2026-10-06 — Editable roster names
+
+- Team and employee official names are editable; same delayed autosave as nicknames.
+- Record ids stay the slug from create time.
+
+## 2026-10-06 — Roster nickname autosave
+
+- Nickname textboxes auto-save after a short idle delay. No Save button on those fields.
+
+## 2026-10-06 — Roster nicknames
+
+- Teams and employees may have zero or more nicknames (strings only).
+- Nicknames live on the same `memory/org.yaml` records; ids still come from the official name.
+
+## 2026-10-06 — Company roster (teams + employees)
+
+- New UI page `/teams` to define teams and employees by name only.
+- Roster lives in `memory/org.yaml` (same gitignored store as tasks; no DB).
+- Capture pipeline is unchanged: tasks stay one YAML file each under `memory/tasks/`.
+- No emails, roles, or assignment-to-person yet.
+
 ## 2026-10-05 — Session context file
 
 - Added `idea/CONTEXT.md` as the handoff primer for future chats (`@idea/CONTEXT.md`).
