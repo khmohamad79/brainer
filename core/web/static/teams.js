@@ -2,15 +2,29 @@ const listEl = document.getElementById("list");
 const detailEl = document.getElementById("detail");
 const form = document.getElementById("add-team");
 const nameEl = document.getElementById("team-name");
-const nicksEl = document.getElementById("team-nicks");
 const saveBtn = document.getElementById("save-team");
 const statusEl = document.getElementById("status");
+const newBtn = document.getElementById("new-team");
 
 const AUTOSAVE_MS = 650;
 const pendingSaves = new Map();
 
 let selectedId = null;
 let org = { teams: [] };
+
+function showComposer() {
+  selectedId = null;
+  form.hidden = false;
+  detailEl.hidden = true;
+  detailEl.innerHTML = "";
+  renderList();
+  nameEl.focus();
+}
+
+function showDetail() {
+  form.hidden = true;
+  detailEl.hidden = false;
+}
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -22,22 +36,23 @@ form.addEventListener("submit", async (e) => {
     const res = await fetch("/api/teams", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, nicknames: parseNicknames(nicksEl.value) }),
+      body: JSON.stringify({ name }),
     });
     if (!res.ok) throw new Error(await res.text());
     const team = await res.json();
     nameEl.value = "";
-    nicksEl.value = "";
     selectedId = team.id;
     statusEl.textContent = "";
     await refresh();
   } catch (err) {
-    statusEl.textContent = "Save failed: " + err.message;
+    statusEl.textContent = err.message;
   } finally {
     done();
     saveBtn.disabled = false;
   }
 });
+
+newBtn.addEventListener("click", showComposer);
 
 async function refresh() {
   const res = await fetch("/api/org");
@@ -47,30 +62,20 @@ async function refresh() {
   renderList();
   const team = org.teams.find((t) => t.id === selectedId);
   if (team) renderDetail(team);
-  else {
-    selectedId = null;
-    detailEl.className = "detail empty";
-    detailEl.innerHTML = `<p class="muted">Select a team.</p>`;
-  }
+  else if (selectedId) showComposer();
 }
 
 function renderList() {
   listEl.innerHTML = "";
-  if (!org.teams.length) {
-    listEl.innerHTML = "<li class='muted' style='padding:0.8rem 0'>No teams yet.</li>";
-    return;
-  }
   for (const t of org.teams) {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "item" + (t.id === selectedId ? " active" : "");
     const n = (t.employees || []).length;
-    const nicks = nickLine(t.nicknames);
     btn.innerHTML =
       `<span class="item-title">${escapeHtml(t.name)}</span>` +
-      (nicks ? `<span class="item-meta"><span>${escapeHtml(nicks)}</span></span>` : "") +
-      `<span class="item-meta"><span>${n} ${n === 1 ? "person" : "people"}</span></span>`;
+      `<span class="item-meta"><span>${n}</span></span>`;
     btn.addEventListener("click", () => {
       selectedId = t.id;
       renderList();
@@ -81,44 +86,54 @@ function renderList() {
   }
 }
 
+function nickChips(list, removeAttr) {
+  return (list || [])
+    .map(
+      (n) =>
+        `<span class="chip">` +
+        `<span class="chip-text">${escapeHtml(n)}</span>` +
+        `<button type="button" class="chip-x" ${removeAttr}="${escapeHtml(n)}" aria-label="Remove">×</button>` +
+        `</span>`
+    )
+    .join("");
+}
+
 function renderDetail(t) {
   const people = t.employees || [];
   const items = people
     .map(
       (e) =>
-        `<li>` +
-        `<input type="text" data-emp-name="${escapeHtml(e.id)}" value="${escapeHtml(e.name)}" placeholder="name" autocomplete="off" />` +
-        `<input type="text" data-emp-nicks="${escapeHtml(e.id)}" value="${escapeHtml((e.nicknames || []).join(", "))}" placeholder="nicknames" autocomplete="off" />` +
-        `<button type="button" class="ghost" data-remove="${escapeHtml(e.id)}">Remove</button>` +
+        `<li data-emp="${escapeHtml(e.id)}">` +
+        `<div class="person-head">` +
+        `<input class="person-name" type="text" data-emp-name="${escapeHtml(e.id)}" value="${escapeHtml(e.name)}" autocomplete="off" aria-label="Name" />` +
+        `<button type="button" class="chip-x person-remove" data-remove="${escapeHtml(e.id)}" aria-label="Remove person">×</button>` +
+        `</div>` +
+        `<div class="chip-row" data-emp-nicks="${escapeHtml(e.id)}">` +
+        nickChips(e.nicknames, "data-remove-emp-nick") +
+        `<button type="button" class="chip-add" data-add-emp-nick="${escapeHtml(e.id)}" aria-label="Add nickname">+</button>` +
+        `</div>` +
         `</li>`
     )
     .join("");
-  detailEl.className = "detail";
+
+  showDetail();
   detailEl.innerHTML = `
-    <div class="add-inline names">
-      <div>
-        <label for="edit-team-name">Team name</label>
-        <input id="edit-team-name" type="text" value="${escapeHtml(t.name)}" required autocomplete="off" />
-      </div>
-      <div>
-        <label for="edit-team-nicks">Team nicknames</label>
-        <input id="edit-team-nicks" type="text" value="${escapeHtml((t.nicknames || []).join(", "))}" placeholder="plat, infra" autocomplete="off" />
-      </div>
+    <div class="team-head">
+      <input id="edit-team-name" class="team-name" type="text" value="${escapeHtml(t.name)}" required autocomplete="off" aria-label="Team name" />
+      <button type="button" class="chip-x" id="remove-team" aria-label="Remove team">×</button>
     </div>
-    <ul class="people">${items || `<li class="muted">No people yet.</li>`}</ul>
-    <form id="add-person" class="add-inline">
-      <div>
-        <label for="person-name">New person</label>
-        <input id="person-name" type="text" required placeholder="Sara" autocomplete="off" />
-      </div>
-      <div>
-        <label for="person-nicks">Nicknames</label>
-        <input id="person-nicks" type="text" placeholder="sari, s" autocomplete="off" />
-      </div>
-      <button type="submit">Add</button>
-    </form>
-    <button type="button" class="ghost" id="remove-team">Remove team</button>
+    <p class="section-label">Nicknames</p>
+    <div class="chip-row" id="team-nicks">
+      ${nickChips(t.nicknames, "data-remove-team-nick")}
+      <button type="button" class="chip-add" id="add-team-nick" aria-label="Add nickname">+</button>
+    </div>
+    <p class="section-label">People</p>
+    <ul class="people">${items || `<li class="muted">—</li>`}</ul>
+    <div class="chip-row">
+      <button type="button" class="chip-add" id="add-person" aria-label="Add person">+</button>
+    </div>
   `;
+
   bindAutosave(document.getElementById("edit-team-name"), "team-name:" + t.id, async () => {
     const name = document.getElementById("edit-team-name").value.trim();
     if (!name) throw new Error("name is empty");
@@ -127,13 +142,37 @@ function renderDetail(t) {
     if (team) team.name = name;
     renderList();
   });
-  bindAutosave(document.getElementById("edit-team-nicks"), "team-nicks:" + t.id, async () => {
-    const nicknames = parseNicknames(document.getElementById("edit-team-nicks").value);
-    await patchJSON("/api/teams/" + encodeURIComponent(t.id), { nicknames });
-    const team = org.teams.find((x) => x.id === t.id);
-    if (team) team.nicknames = nicknames;
-    renderList();
+
+  document.getElementById("add-team-nick").addEventListener("click", (e) => {
+    startChipInput(e.currentTarget, async (value) => {
+      const next = uniqueAppend(t.nicknames || [], value);
+      await patchJSON("/api/teams/" + encodeURIComponent(t.id), { nicknames: next });
+      t.nicknames = next;
+      statusEl.textContent = "";
+      renderDetail(t);
+      renderList();
+    });
   });
+
+  detailEl.querySelectorAll("[data-remove-team-nick]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const nick = btn.getAttribute("data-remove-team-nick");
+      const next = (t.nicknames || []).filter((n) => n !== nick);
+      const done = memoryHold();
+      try {
+        await patchJSON("/api/teams/" + encodeURIComponent(t.id), { nicknames: next });
+        t.nicknames = next;
+        statusEl.textContent = "";
+        renderDetail(t);
+        renderList();
+      } catch (err) {
+        statusEl.textContent = err.message;
+      } finally {
+        done();
+      }
+    });
+  });
+
   detailEl.querySelectorAll("[data-emp-name]").forEach((input) => {
     const empId = input.getAttribute("data-emp-name");
     bindAutosave(input, "emp-name:" + t.id + ":" + empId, async () => {
@@ -145,39 +184,63 @@ function renderDetail(t) {
       renderList();
     });
   });
-  detailEl.querySelectorAll("[data-emp-nicks]").forEach((input) => {
-    const empId = input.getAttribute("data-emp-nicks");
-    bindAutosave(input, "emp-nicks:" + t.id + ":" + empId, async () => {
-      const nicknames = parseNicknames(input.value);
-      await patchJSON("/api/teams/" + encodeURIComponent(t.id) + "/employees/" + encodeURIComponent(empId), { nicknames });
-      const emp = findEmployee(t.id, empId);
-      if (emp) emp.nicknames = nicknames;
+
+  detailEl.querySelectorAll("[data-add-emp-nick]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const empId = btn.getAttribute("data-add-emp-nick");
+      startChipInput(e.currentTarget, async (value) => {
+        const emp = findEmployee(t.id, empId);
+        if (!emp) return;
+        const next = uniqueAppend(emp.nicknames || [], value);
+        await patchJSON(
+          "/api/teams/" + encodeURIComponent(t.id) + "/employees/" + encodeURIComponent(empId),
+          { nicknames: next }
+        );
+        emp.nicknames = next;
+        statusEl.textContent = "";
+        renderDetail(t);
+      });
     });
   });
-  const personForm = document.getElementById("add-person");
-  const personName = document.getElementById("person-name");
-  const personNicks = document.getElementById("person-nicks");
-  personForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const name = personName.value.trim();
-    if (!name) return;
-    const done = memoryHold();
-    try {
+
+  detailEl.querySelectorAll("[data-remove-emp-nick]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const li = btn.closest("[data-emp]");
+      const empId = li?.getAttribute("data-emp");
+      const nick = btn.getAttribute("data-remove-emp-nick");
+      const emp = findEmployee(t.id, empId);
+      if (!emp) return;
+      const next = (emp.nicknames || []).filter((n) => n !== nick);
+      const done = memoryHold();
+      try {
+        await patchJSON(
+          "/api/teams/" + encodeURIComponent(t.id) + "/employees/" + encodeURIComponent(empId),
+          { nicknames: next }
+        );
+        emp.nicknames = next;
+        statusEl.textContent = "";
+        renderDetail(t);
+      } catch (err) {
+        statusEl.textContent = err.message;
+      } finally {
+        done();
+      }
+    });
+  });
+
+  document.getElementById("add-person").addEventListener("click", (e) => {
+    startChipInput(e.currentTarget, async (value) => {
       const res = await fetch("/api/teams/" + encodeURIComponent(t.id) + "/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, nicknames: parseNicknames(personNicks.value) }),
+        body: JSON.stringify({ name: value }),
       });
-      if (!res.ok) {
-        statusEl.textContent = "Save failed: " + (await res.text());
-        return;
-      }
+      if (!res.ok) throw new Error(await res.text());
       statusEl.textContent = "";
       await refresh();
-    } finally {
-      done();
-    }
+    });
   });
+
   detailEl.querySelectorAll("[data-remove]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const done = memoryHold();
@@ -193,17 +256,80 @@ function renderDetail(t) {
       }
     });
   });
+
   document.getElementById("remove-team").addEventListener("click", async () => {
     const done = memoryHold();
     try {
       await fetch("/api/teams/" + encodeURIComponent(t.id), { method: "DELETE" });
-      selectedId = null;
       statusEl.textContent = "";
+      showComposer();
       await refresh();
     } finally {
       done();
     }
   });
+}
+
+function startChipInput(addBtn, onCommit) {
+  if (addBtn.previousElementSibling?.classList?.contains("chip-input")) {
+    addBtn.previousElementSibling.focus();
+    return;
+  }
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "chip-input";
+  input.autocomplete = "off";
+  addBtn.before(input);
+  input.focus();
+
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    input.remove();
+  };
+
+  const commit = async () => {
+    const value = input.value.trim();
+    if (!value) {
+      close();
+      return;
+    }
+    input.disabled = true;
+    const done = memoryHold();
+    try {
+      await onCommit(value);
+    } catch (err) {
+      statusEl.textContent = err.message;
+      input.disabled = false;
+      input.focus();
+      return;
+    } finally {
+      done();
+    }
+    close();
+  };
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  });
+  input.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (!closed && document.activeElement !== input) commit();
+    }, 0);
+  });
+}
+
+function uniqueAppend(list, value) {
+  const next = list.slice();
+  if (!next.some((n) => n.toLowerCase() === value.toLowerCase())) next.push(value);
+  return next;
 }
 
 function findEmployee(teamId, empId) {
@@ -226,7 +352,7 @@ function bindAutosave(input, key, persist) {
       await persist();
       statusEl.textContent = "";
     } catch (err) {
-      statusEl.textContent = "Save failed: " + err.message;
+      statusEl.textContent = err.message;
     }
   };
   input.addEventListener("input", () => scheduleSave(key, run));
@@ -258,17 +384,6 @@ function flushSave(key, persist) {
   Promise.resolve(persist()).finally(entry.release);
 }
 
-function parseNicknames(raw) {
-  return String(raw || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function nickLine(list) {
-  return (list || []).join(", ");
-}
-
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -278,5 +393,5 @@ function escapeHtml(s) {
 }
 
 refresh().catch((err) => {
-  statusEl.textContent = "Could not load teams: " + err.message;
+  statusEl.textContent = err.message;
 });

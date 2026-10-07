@@ -24,7 +24,7 @@ func TestOrgRosterHTTP(t *testing.T) {
 	if res.Code != 200 {
 		t.Fatalf("GET /teams: %d", res.Code)
 	}
-	if !strings.Contains(res.Body.String(), "New team") || !strings.Contains(res.Body.String(), "memobar") {
+	if !strings.Contains(res.Body.String(), "add-team") || !strings.Contains(res.Body.String(), "memobar") {
 		t.Fatalf("teams page missing form: %s", res.Body.String())
 	}
 

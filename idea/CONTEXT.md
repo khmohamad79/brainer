@@ -19,7 +19,7 @@ Not yet: prioritization, calendar, splitting into many files, multi-channel Slac
 | Granularity | 1 message = 1 YAML file |
 | Store | No DB — `memory/tasks/{id}.yaml` + `memory/org.yaml` (gitignored) |
 | Format | YAML |
-| UI | Separate package under `core/web`, same Go binary (no SPA); Capture + Archive + Teams pages |
+| UI | Separate package under `core/web`, same Go binary (no SPA); dark minimal chrome (top bar + right Inbox/Archive sidebar); Capture + Teams |
 | GPT | OpenAI-compatible `POST {GPT_BASE_URL}/chat/completions` |
 | Env names | `GPT_BASE_URL`, `GPT_TOKEN`, `GPT_MODEL` (no provider prefix) |
 | `.env.example` | No real API URL committed |

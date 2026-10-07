@@ -7,44 +7,39 @@
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
-  <div class="memobar" role="status" aria-live="polite" aria-atomic="true">
-    <span id="memobar-text"></span>
-  </div>
-  <div class="shell">
-    <header>
-      <div>
-        <p class="eyebrow">assignment capture</p>
-        <h1>Brainer</h1>
-      </div>
-      <div>
-        <p class="lede">Paste anything you were assigned. It is saved to disk first, then filled in.</p>
-        <nav class="nav" aria-label="Primary">
-          <a href="/" aria-current="page">Capture</a>
-          <a href="/archive">Archive</a>
-          <a href="/teams">Teams</a>
-        </nav>
-      </div>
-    </header>
-
-    <form id="capture" class="capture">
-      <label for="raw">New assignment</label>
-      <textarea id="raw" name="raw" rows="6" required placeholder="Slack ping, meeting dump, “fix login by Friday, talk to Sara”…" dir="auto"></textarea>
-      <div class="row">
-        <button type="submit" id="save">Record</button>
-        <p id="save-status" class="status" aria-live="polite"></p>
-      </div>
-    </form>
-
-    <div class="layout">
-      <section>
-        <h2>Inbox</h2>
-        <ul id="list" class="list"></ul>
-      </section>
-      <section id="detail" class="detail empty">
-        <p class="muted">Select a task.</p>
-      </section>
+  <header class="topbar">
+    <nav class="nav" aria-label="Primary">
+      <a href="/" aria-current="page">Capture</a>
+      <a href="/teams">Teams</a>
+    </nav>
+    <div class="memobar" role="status" aria-live="polite" aria-atomic="true">
+      <span id="memobar-text"></span>
     </div>
+    <div></div>
+  </header>
+
+  <div class="app">
+    <main class="main">
+      <form id="capture" class="composer">
+        <textarea id="raw" name="raw" rows="8" required dir="auto"></textarea>
+        <p id="save-status" class="status" aria-live="polite"></p>
+        <button type="submit" id="save" class="composer-submit">Record</button>
+      </form>
+      <section id="detail" class="detail" hidden></section>
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <div class="side-tabs" role="tablist">
+          <button type="button" class="side-tab" role="tab" id="tab-inbox" aria-selected="true">Inbox</button>
+          <button type="button" class="side-tab" role="tab" id="tab-archive" aria-selected="false">Archive</button>
+        </div>
+        <button type="button" class="linkish" id="new-task">New</button>
+      </div>
+      <ul id="list" class="list"></ul>
+    </aside>
   </div>
+
   <script src="/static/memory-bar.js"></script>
   <script src="/static/app.js"></script>
 </body>

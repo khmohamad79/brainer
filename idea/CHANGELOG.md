@@ -1,5 +1,17 @@
 # Idea changelog
 
+## 2026-10-07 — Teams badge editor
+
+- New team: name only.
+- Team nicknames, people, and person nicknames are badge chips with + / remove (no comma textboxes).
+
+## 2026-10-07 — Minimal dark UI
+
+- Dark theme only; modern sans typeface.
+- Chrome: top bar (page links + Memorizing status), right sidebar (Inbox / Archive), center (new box / detail).
+- `/archive` opens Capture with the Archive list selected.
+- Drop redundant ledes, placeholders, and hint copy.
+
 ## 2026-10-07 — Archive + delete
 
 - Tasks have `archived` (bool), separate from `status`. Archive from any status; status is left alone.

@@ -142,8 +142,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) archivePage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	http.ServeFileFS(w, r, web.Pages, "archive.html")
+	http.Redirect(w, r, "/?list=archive", http.StatusFound)
 }
 
 func (s *Server) teamsPage(w http.ResponseWriter, r *http.Request) {

@@ -4,10 +4,54 @@ const form = document.getElementById("capture");
 const rawEl = document.getElementById("raw");
 const saveBtn = document.getElementById("save");
 const saveStatus = document.getElementById("save-status");
+const newBtn = document.getElementById("new-task");
+const tabInbox = document.getElementById("tab-inbox");
+const tabArchive = document.getElementById("tab-archive");
 
 let selectedId = null;
+let listMode = "inbox";
 let pollTimer = null;
 let orgCache = null;
+
+function readListParam() {
+  const v = new URLSearchParams(location.search).get("list");
+  return v === "archive" ? "archive" : "inbox";
+}
+
+function setListMode(mode, { push = true } = {}) {
+  listMode = mode === "archive" ? "archive" : "inbox";
+  tabInbox.setAttribute("aria-selected", listMode === "inbox" ? "true" : "false");
+  tabArchive.setAttribute("aria-selected", listMode === "archive" ? "true" : "false");
+  newBtn.hidden = listMode !== "inbox";
+  if (push) {
+    const url = listMode === "archive" ? "/?list=archive" : "/";
+    history.replaceState(null, "", url);
+  }
+  selectedId = null;
+  showComposer();
+  refresh();
+}
+
+function showComposer() {
+  selectedId = null;
+  clearTimeout(pollTimer);
+  if (listMode === "inbox") {
+    form.hidden = false;
+    detailEl.hidden = true;
+    detailEl.innerHTML = "";
+    rawEl.focus();
+  } else {
+    form.hidden = true;
+    detailEl.hidden = false;
+    detailEl.innerHTML = "";
+  }
+  renderListActive();
+}
+
+function showDetail() {
+  form.hidden = true;
+  detailEl.hidden = false;
+}
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -26,14 +70,28 @@ form.addEventListener("submit", async (e) => {
     rawEl.value = "";
     saveStatus.textContent = "";
     selectedId = task.id;
+    if (listMode !== "inbox") {
+      listMode = "inbox";
+      tabInbox.setAttribute("aria-selected", "true");
+      tabArchive.setAttribute("aria-selected", "false");
+      newBtn.hidden = false;
+      history.replaceState(null, "", "/");
+    }
     await refresh();
   } catch (err) {
-    saveStatus.textContent = "Save failed: " + err.message;
+    saveStatus.textContent = err.message;
   } finally {
     done();
     saveBtn.disabled = false;
   }
 });
+
+newBtn.addEventListener("click", () => {
+  if (listMode !== "inbox") setListMode("inbox");
+  else showComposer();
+});
+tabInbox.addEventListener("click", () => setListMode("inbox"));
+tabArchive.addEventListener("click", () => setListMode("archive"));
 
 async function loadOrg() {
   if (orgCache) return orgCache;
@@ -49,17 +107,14 @@ async function loadOrg() {
 }
 
 async function refresh() {
-  const res = await fetch("/api/tasks?archived=0");
+  const q = listMode === "archive" ? "archived=1" : "archived=0";
+  const res = await fetch("/api/tasks?" + q);
   const tasks = await res.json();
   renderList(tasks);
   if (selectedId) {
     const t = tasks.find((x) => x.id === selectedId);
     if (t) renderDetail(t);
-    else {
-      selectedId = null;
-      detailEl.className = "detail empty";
-      detailEl.innerHTML = `<p class="muted">Select a task.</p>`;
-    }
+    else showComposer();
   }
 }
 
@@ -69,24 +124,27 @@ async function fetchTask(id) {
   return res.json();
 }
 
+function renderListActive() {
+  listEl.querySelectorAll("button.item").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.id === selectedId);
+  });
+}
+
 function renderList(tasks) {
   listEl.innerHTML = "";
-  if (!tasks.length) {
-    listEl.innerHTML = "<li class='muted' style='padding:0.8rem 0'>Nothing captured yet.</li>";
-    return;
-  }
   for (const t of tasks) {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "item" + (t.id === selectedId ? " active" : "");
+    btn.dataset.id = t.id;
     btn.innerHTML =
       `<span class="item-title" dir="auto">${escapeHtml(taskLabel(t))}</span>` +
       `<span class="item-meta">${badges(t)}</span>`;
     btn.addEventListener("click", () => {
       selectedId = t.id;
       renderDetail(t);
-      refresh();
+      renderListActive();
     });
     li.appendChild(btn);
     listEl.appendChild(li);
@@ -94,7 +152,12 @@ function renderList(tasks) {
 }
 
 function badges(t) {
-  return `<span>${escapeHtml(t.status)}</span>`;
+  const parts = [`<span>${escapeHtml(t.status)}</span>`];
+  if (listMode === "inbox") {
+    if (t.fill === "pending") parts.push(`<span class="badge pending">fill</span>`);
+    if (t.fill === "failed") parts.push(`<span class="badge failed">fill</span>`);
+  }
+  return parts.join("");
 }
 
 function taskLabel(t) {
@@ -111,14 +174,23 @@ const refreshIcon = `<svg class="icon-refresh" viewBox="0 0 24 24" aria-hidden="
 function renderDetail(t) {
   const qs = (t.open_questions || []).join(" · ") || "—";
   const filled = t.fill === "ok";
-  detailEl.className = "detail";
+  const archived = listMode === "archive" || t.archived;
+  showDetail();
   detailEl.innerHTML = `
     <div class="detail-top">
       <pre class="raw raw-top" dir="auto">${escapeHtml(t.raw || "")}</pre>
-      <button type="button" id="retry-fill" class="icon-btn ${filled ? "filled" : ""}" title="Refresh fill" aria-label="Refresh fill">${refreshIcon}</button>
+      ${
+        archived
+          ? ""
+          : `<button type="button" id="retry-fill" class="icon-btn ${filled ? "filled" : ""}" title="Refresh fill" aria-label="Refresh fill">${refreshIcon}</button>`
+      }
     </div>
     <div class="row" style="margin:0 0 1rem">
-      <button type="button" id="archive-task" class="ghost">Archive</button>
+      ${
+        archived
+          ? `<button type="button" id="delete-task" class="danger">Delete</button>`
+          : `<button type="button" id="archive-task" class="ghost">Archive</button>`
+      }
     </div>
     <dl class="kv">
       <dt>id</dt><dd>${escapeHtml(t.id)}</dd>
@@ -130,6 +202,7 @@ function renderDetail(t) {
     </dl>
   `;
   fillRelated(t);
+
   const retry = document.getElementById("retry-fill");
   if (retry) {
     retry.addEventListener("click", async () => {
@@ -141,6 +214,7 @@ function renderDetail(t) {
       refresh();
     });
   }
+
   const archiveBtn = document.getElementById("archive-task");
   if (archiveBtn) {
     archiveBtn.addEventListener("click", async () => {
@@ -149,19 +223,41 @@ function renderDetail(t) {
       try {
         const res = await fetch("/api/tasks/" + encodeURIComponent(t.id) + "/archive", { method: "POST" });
         if (!res.ok) throw new Error(await res.text());
-        selectedId = null;
         saveStatus.textContent = "";
+        showComposer();
         await refresh();
       } catch (err) {
-        saveStatus.textContent = "Archive failed: " + err.message;
+        saveStatus.textContent = err.message;
         archiveBtn.disabled = false;
       } finally {
         done();
       }
     });
   }
+
+  const del = document.getElementById("delete-task");
+  if (del) {
+    del.addEventListener("click", async () => {
+      if (!confirm("Delete this archived task from disk?")) return;
+      del.disabled = true;
+      const done = memoryHold();
+      try {
+        const res = await fetch("/api/tasks/" + encodeURIComponent(t.id), { method: "DELETE" });
+        if (!res.ok) throw new Error(await res.text());
+        saveStatus.textContent = "";
+        showComposer();
+        await refresh();
+      } catch (err) {
+        saveStatus.textContent = err.message;
+        del.disabled = false;
+      } finally {
+        done();
+      }
+    });
+  }
+
   clearTimeout(pollTimer);
-  if (t.fill === "pending") {
+  if (!archived && t.fill === "pending") {
     pollTimer = setTimeout(async () => {
       const fresh = await fetchTask(t.id);
       if (fresh && !fresh.archived) {
@@ -199,6 +295,15 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+listMode = readListParam();
+tabInbox.setAttribute("aria-selected", listMode === "inbox" ? "true" : "false");
+tabArchive.setAttribute("aria-selected", listMode === "archive" ? "true" : "false");
+newBtn.hidden = listMode !== "inbox";
+if (listMode === "archive") {
+  form.hidden = true;
+  detailEl.hidden = false;
+}
+
 Promise.all([loadOrg(), refresh()]).catch((err) => {
-  saveStatus.textContent = "Could not load tasks: " + err.message;
+  saveStatus.textContent = err.message;
 });

@@ -2,42 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="refresh" content="0; url=/?list=archive" />
   <title>Brainer — Archive</title>
-  <link rel="stylesheet" href="/static/app.css" />
+  <script>location.replace("/?list=archive");</script>
 </head>
-<body>
-  <div class="memobar" role="status" aria-live="polite" aria-atomic="true">
-    <span id="memobar-text"></span>
-  </div>
-  <div class="shell">
-    <header>
-      <div>
-        <p class="eyebrow">assignment capture</p>
-        <h1>Archive</h1>
-      </div>
-      <div>
-        <p class="lede">Tasks you moved out of the inbox. Delete removes the file from disk.</p>
-        <nav class="nav" aria-label="Primary">
-          <a href="/">Capture</a>
-          <a href="/archive" aria-current="page">Archive</a>
-          <a href="/teams">Teams</a>
-        </nav>
-      </div>
-    </header>
-
-    <div class="layout">
-      <section>
-        <h2>Archived</h2>
-        <ul id="list" class="list"></ul>
-      </section>
-      <section id="detail" class="detail empty">
-        <p class="muted">Select a task.</p>
-      </section>
-    </div>
-    <p id="page-status" class="status" aria-live="polite"></p>
-  </div>
-  <script src="/static/memory-bar.js"></script>
-  <script src="/static/archive.js"></script>
-</body>
+<body></body>
 </html>
